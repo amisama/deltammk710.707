@@ -114,11 +114,11 @@ function menu_uninstall()
 end
 
 -- ==========================================================
--- LOOP MENU UTAMA (Biar gak langsung close)
+-- LOOP MENU UTAMA
 -- ==========================================================
 while true do
     os.execute("clear")
-    print(cyan .. "=== GITHUB MANAGER PRO ===" .. reset)
+    print(cyan .. "=== NO MERCY ===" .. reset)
     print("1) Same HWID A10 (6 APK)")
     print("2) Not Same HWID A10 (5 APK)")
     print("3) Auto Uninstall (" .. search_prefix .. ")")
@@ -139,4 +139,5 @@ while true do
         print(red .. "\nPilihan salah cok! Tekan Enter..." .. reset)
         io.read()
     end
+
 end
