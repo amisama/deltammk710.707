@@ -44,10 +44,12 @@ function parse_input(input, max)
         for part in input:gmatch("([^,%s]+)") do
             local s, e = part:match("(%d+)-(%d+)")
             if s and e then
-                for i = tonumber(s), tonumber(e) do table.insert(targets, i) end
+                for i = tonumber(s), tonumber(e) do 
+                    if i >= 1 and i <= max then table.insert(targets, i) end
+                end
             else
                 local n = tonumber(part)
-                if n then table.insert(targets, n) end
+                if n and n >= 1 and n <= max then table.insert(targets, n) end
             end
         end
     end
@@ -122,7 +124,11 @@ function process_install(category_name)
     if input == "0" then return end
     
     local targets = parse_input(input, #list)
-    if #targets == 0 then return end
+    if #targets == 0 then 
+        print("\n  " .. c.bold .. c.red .. "[!] Input tidak valid/typo! Tekan Enter..." .. c.reset)
+        io.read()
+        return 
+    end
 
     print("\n  " .. c.bold .. c.yellow .. "[*] Tahap 1: Mendownload file ke " .. c.reset .. c.cyan .. dl_path .. c.reset)
     local files = {}
@@ -137,9 +143,10 @@ function process_install(category_name)
     print("\n  " .. c.bold .. c.green .. "[*] Tahap 2: Menginstall semua file (Root)..." .. c.reset)
     for _, path in ipairs(files) do
         print("  " .. c.yellow .. "    Installing: " .. path .. c.reset)
-        os.execute("su -c 'pm install -r " .. path .. "'")
+        os.execute("su -c 'pm install -r " .. path .. "' < /dev/null")
         os.execute("rm " .. path)
     end
+    os.execute("stty sane")
     print("\n  " .. c.bold .. c.green .. "[ ✓ ] Installasi Selesai! Tekan Enter..." .. c.reset)
     io.read()
 end
@@ -172,12 +179,19 @@ function menu_uninstall()
     if input == "0" then return end
 
     local targets = parse_input(input, #installed)
+    if #targets == 0 then 
+        print("\n  " .. c.bold .. c.red .. "[!] Input tidak valid/typo! Tekan Enter..." .. c.reset)
+        io.read()
+        return 
+    end
+
     for _, idx in ipairs(targets) do
         if installed[idx] then
             print("  " .. c.red .. "    Deleting: " .. installed[idx] .. c.reset)
-            os.execute("su -c 'pm uninstall " .. installed[idx] .. "' > /dev/null 2>&1")
+            os.execute("su -c 'pm uninstall " .. installed[idx] .. "' < /dev/null > /dev/null 2>&1")
         end
     end
+    os.execute("stty sane")
     print("\n  " .. c.bold .. c.green .. "[ ✓ ] Uninstall Bersih! Tekan Enter..." .. c.reset)
     io.read()
 end
