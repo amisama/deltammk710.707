@@ -150,6 +150,7 @@ local function do_install(folder_name, list)
 
     print("")
     print("  >> Mendownload " .. #targets .. " file ke " .. DL_PATH)
+    os.execute("stty sane 2>/dev/null") -- reset terminal biar \r curl ga jadi newline
     local downloaded = {}
     for _, idx in ipairs(targets) do
         local app  = list[idx]
@@ -157,7 +158,7 @@ local function do_install(folder_name, list)
         print("     Downloading: " .. app.name)
         
         local ok = os.execute(
-            string.format("curl -L --fail --progress-bar -H 'Accept: application/octet-stream' -o '%s' '%s'",
+            string.format("curl -L --fail --progress-bar -H 'Accept: application/octet-stream' -o '%s' '%s' 2>/dev/tty",
                 dest, app.url)
         )
         if ok == 0 or ok == true then
