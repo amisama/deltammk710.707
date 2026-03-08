@@ -8,32 +8,23 @@ local dl_path = "/sdcard/Download/"
 
 local api_url = "https://gofile-clone.mrcy-25d.workers.dev"
 
-function load_folders()
-    local raw = exec("curl -s " .. api_url .. "/api/cli/folders")
+function load_database()
+    local raw = exec("curl -s " .. api_url .. "/api/cli/all")
+    local db = {}
     local folders = {}
     if raw and raw ~= "EMPTY" and raw ~= "ERROR" then
         for line in raw:gmatch("[^\r\n]+") do
-            local id, name = line:match("([^|]+)|([^|]+)")
-            if id and name then
-                table.insert(folders, { id = id, name = name })
+            local folder, name, url = line:match("([^|]+)|([^|]+)|([^|]+)")
+            if folder and name and url then
+                if not db[folder] then 
+                    db[folder] = {}
+                    table.insert(folders, folder)
+                end
+                table.insert(db[folder], { name = name, url = url })
             end
         end
     end
-    return folders
-end
-
-function load_files(folder_id)
-    local raw = exec("curl -s " .. api_url .. "/api/cli/files/" .. folder_id)
-    local files = {}
-    if raw and raw ~= "EMPTY" and raw ~= "ERROR" then
-        for line in raw:gmatch("[^\r\n]+") do
-            local id, name, url = line:match("([^|]+)|([^|]+)|([^|]+)")
-            if id and name and url then
-                table.insert(files, { id = id, name = name, url = url })
-            end
-        end
-    end
-    return files
+    return db, folders
 end
 
 local search_prefix = "com.roblox"
@@ -120,14 +111,11 @@ end
 -- CORE LOGIC
 -- ==========================================================
 
-function process_install(folder_id, folder_name)
-    print("  " .. c.yellow .. "[*] Fetching APKs from server..." .. c.reset)
-    local list = load_files(folder_id)
-    
+function process_install(folder_name, list)
     show_header()
     print("  " .. c.bold .. c.cyan .. "━━━ " .. folder_name .. " ━━━" .. c.reset .. "\n")
     
-    if #list == 0 then
+    if not list or #list == 0 then
         print("  " .. c.red .. "[!] Folder ini kosong atau server sedang sibuk. Tekan Enter..." .. c.reset)
         io.read()
         return
@@ -242,36 +230,42 @@ end
 -- ==========================================================
 while true do
     show_header()
-    print("  " .. c.yellow .. "[*] Connect to Server API..." .. c.reset)
-    local folders = load_folders()
+    print("  " .. c.yellow .. "[*] Sinkronisasi Database API..." .. c.reset)
+    local db, folder_keys = load_database()
     
-    local rows = {}
-    for i, folder in ipairs(folders) do
-        table.insert(rows, {tostring(i), {color=c.green, text=folder.name}, "Buka Folder Cloud"})
-    end
-    
-    local uninstall_idx = tostring(#folders + 1)
-    local exit_idx = "0"
-    
-    table.insert(rows, {uninstall_idx, {color=c.magenta, text="Auto Uninstall"}, "Hapus data / client (" .. search_prefix .. ")"})
-    table.insert(rows, {exit_idx, {color=c.red, text="Exit"}, "Keluar dari installer"})
-    
-    show_header()
-    draw_table("Gofile Cloud Menu", {"ID", "Folder/Feature", "Description"}, rows)
-
-    io.write("\n  " .. c.bold .. c.yellow .. "▶  Pilih id: " .. c.reset)
-    local main_act = io.read()
-    local num = tonumber(main_act)
-
-    if main_act == exit_idx then 
-        print("\n  " .. c.bold .. c.red .. "Sayonara! — Tools ditutup." .. c.reset .. "\n")
-        break
-    elseif main_act == uninstall_idx then 
-        menu_uninstall()
-    elseif num and num >= 1 and num <= #folders then 
-        process_install(folders[num].id, folders[num].name)
+    if #folder_keys == 0 then
+        print("  " .. c.red .. "\n  [!] Belum ada file APK di web Gofile atau server sibuk. Tekan Enter..." .. c.reset)
+        io.read()
     else
-        print("\n  " .. c.red .. "  [!] Pilihan tidak valid atau server gagal." .. c.reset)
-        os.execute("sleep 1")
+        local rows = {}
+        for i, folder_name in ipairs(folder_keys) do
+            table.insert(rows, {tostring(i), {color=c.green, text=folder_name}, "Buka Folder Cloud (" .. #db[folder_name] .. " File)"})
+        end
+        
+        local uninstall_idx = tostring(#folder_keys + 1)
+        local exit_idx = "0"
+        
+        table.insert(rows, {uninstall_idx, {color=c.magenta, text="Auto Uninstall"}, "Hapus data / client (" .. search_prefix .. ")"})
+        table.insert(rows, {exit_idx, {color=c.red, text="Exit"}, "Keluar dari installer"})
+        
+        show_header()
+        draw_table("Gofile Cloud Menu", {"ID", "Folder/Feature", "Description"}, rows)
+
+        io.write("\n  " .. c.bold .. c.yellow .. "▶  Pilih id: " .. c.reset)
+        local main_act = io.read()
+        local num = tonumber(main_act)
+
+        if main_act == exit_idx then 
+            print("\n  " .. c.bold .. c.red .. "Sayonara! — Tools ditutup." .. c.reset .. "\n")
+            break
+        elseif main_act == uninstall_idx then 
+            menu_uninstall()
+        elseif num and num >= 1 and num <= #folder_keys then 
+            local fname = folder_keys[num]
+            process_install(fname, db[fname])
+        else
+            print("\n  " .. c.red .. "  [!] Pilihan tidak valid." .. c.reset)
+            os.execute("sleep 1")
+        end
     end
 end
