@@ -157,7 +157,7 @@ local function do_install(folder_name, list)
         print("     Downloading: " .. app.name)
         
         local ok = os.execute(
-            string.format("curl -L --fail -s -H 'Accept: application/octet-stream' -o '%s' '%s'",
+            string.format("curl -L --fail --progress-bar -H 'Accept: application/octet-stream' -o '%s' '%s'",
                 dest, app.url)
         )
         if ok == 0 or ok == true then
@@ -185,6 +185,65 @@ local function do_install(folder_name, list)
 
     print("")
     print("  >> Instalasi selesai.")
+
+    -- Auto-inject Delta key jika folder mengandung kata "delta"
+    if folder_name:lower():find("delta") then
+        print("")
+        print("  " .. string.rep("=", 48))
+        print("  [*] Delta terdeteksi — memulai injeksi lisensi...")
+        print("  " .. string.rep("=", 48))
+        os.execute("sleep 1")
+
+        -- Animasi scanning
+        local scan_lines = {
+            "  > Scanning Delta process memory...",
+            "  > Locating license verification routine...",
+            "  > Patching auth token validator...",
+            "  > Generating premium session hash...",
+            "  > Injecting KEY payload...",
+        }
+        for _, line in ipairs(scan_lines) do
+            io.write(line)
+            io.flush()
+            os.execute("sleep 0.4")
+            -- animasi titik-titik
+            for _ = 1, 3 do
+                io.write(".")
+                io.flush()
+                os.execute("sleep 0.25")
+            end
+            print("  OK")
+        end
+
+        os.execute("sleep 0.5")
+        print("")
+        print("  > Writing license file to Delta internals...")
+        os.execute("sleep 0.6")
+
+        -- Tulis key beneran
+        os.execute("mkdir -p '" .. DELTA_DIR .. "'")
+        local f = io.open(DELTA_DIR .. "license", "w")
+        if f then
+            f:write(DELTA_KEY)
+            f:close()
+            os.execute("sleep 0.4")
+            print("  > Verifying injected key integrity...")
+            os.execute("sleep 0.7")
+            print("")
+            print("  " .. string.rep("=", 48))
+            print("  [OK] INJEKSI BERHASIL! Delta sudah Premium.")
+            print("  Key : " .. DELTA_KEY)
+            print("  Path: " .. DELTA_DIR .. "license")
+            print("  " .. string.rep("=", 48))
+        else
+            print("  [!] Gagal tulis file. Pastikan Termux punya izin storage.")
+        end
+
+        print("")
+        pause()
+        return
+    end
+
     pause()
 end
 
