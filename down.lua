@@ -6,26 +6,35 @@ local c = {
 
 local dl_path = "/sdcard/Download/"
 
--- ==========================================================
--- DATABASE APK
--- ==========================================================
-local database = {
-    ["Same HWID"] = {
-        { name = "Same HWID 01", url = "https://github.com/mouchiell/d3lt4l1t3/releases/download/2.710.707-02/NO.MERCY.DELTA.LITE.SAME.HWID.01-2.710.707_2.apk" },
-        { name = "Same HWID 02", url = "https://github.com/mouchiell/d3lt4l1t3/releases/download/2.710.707-02/NO.MERCY.DELTA.LITE.SAME.HWID.02-2.710.707_2.apk" },
-        { name = "Same HWID 03", url = "https://github.com/mouchiell/d3lt4l1t3/releases/download/2.710.707-02/NO.MERCY.DELTA.LITE.SAME.HWID.03-2.710.707_2.apk" },
-        { name = "Same HWID 04", url = "https://github.com/mouchiell/d3lt4l1t3/releases/download/2.710.707-02/NO.MERCY.DELTA.LITE.SAME.HWID.04-2.710.707_2.apk" },
-        { name = "Same HWID 05", url = "https://github.com/mouchiell/d3lt4l1t3/releases/download/2.710.707-02/NO.MERCY.DELTA.LITE.SAME.HWID.05-2.710.707_2.apk" },
-        { name = "Same HWID 06", url = "https://github.com/mouchiell/d3lt4l1t3/releases/download/2.710.707-02/NO.MERCY.DELTA.LITE.SAME.HWID.06-2.710.707.apk" },
-    },
-    ["Not Same HWID"] = {
-        { name = "Not Same HWID 01", url = "https://github.com/mouchiell/d3lt4l1t3/releases/download/2.710.707-02/NO.MERCY.DELTA.LITE.01-2.710.707.apk" },
-        { name = "Not Same HWID 02", url = "https://github.com/mouchiell/d3lt4l1t3/releases/download/2.710.707-02/NO.MERCY.DELTA.LITE.02-2.710.707.apk" },
-        { name = "Not Same HWID 03", url = "https://github.com/mouchiell/d3lt4l1t3/releases/download/2.710.707-02/NO.MERCY.DELTA.LITE.03-2.710.707.apk" },
-        { name = "Not Same HWID 04", url = "https://github.com/mouchiell/d3lt4l1t3/releases/download/2.710.707-02/NO.MERCY.DELTA.LITE.04-2.710.707.apk" },
-        { name = "Not Same HWID 05", url = "https://github.com/mouchiell/d3lt4l1t3/releases/download/2.710.707-02/NO.MERCY.DELTA.LITE.05-2.710.707.apk" },
-    }
-}
+local api_url = "https://gofile-clone.mrcy-25d.workers.dev"
+
+function load_folders()
+    local raw = exec("curl -s " .. api_url .. "/api/cli/folders")
+    local folders = {}
+    if raw and raw ~= "EMPTY" and raw ~= "ERROR" then
+        for line in raw:gmatch("[^\r\n]+") do
+            local id, name = line:match("([^|]+)|([^|]+)")
+            if id and name then
+                table.insert(folders, { id = id, name = name })
+            end
+        end
+    end
+    return folders
+end
+
+function load_files(folder_id)
+    local raw = exec("curl -s " .. api_url .. "/api/cli/files/" .. folder_id)
+    local files = {}
+    if raw and raw ~= "EMPTY" and raw ~= "ERROR" then
+        for line in raw:gmatch("[^\r\n]+") do
+            local id, name, url = line:match("([^|]+)|([^|]+)|([^|]+)")
+            if id and name and url then
+                table.insert(files, { id = id, name = name, url = url })
+            end
+        end
+    end
+    return files
+end
 
 local search_prefix = "com.roblox"
 
@@ -35,6 +44,14 @@ function exec(cmd)
     h:close()
     return r
 end
+
+function su_exec(cmd)
+    local h = io.popen("su -c '" .. cmd .. "' 2>&1")
+    local r = h:read("*a")
+    h:close()
+    return r
+end
+
 
 function parse_input(input, max)
     local targets = {}
@@ -56,9 +73,6 @@ function parse_input(input, max)
     return targets
 end
 
--- ==========================================================
--- UI HELPERS (Hachitool Rich-style)
--- ==========================================================
 function pad(str, target_len)
     if #str > target_len then
         return str:sub(1, target_len - 3) .. "..."
@@ -106,14 +120,22 @@ end
 -- CORE LOGIC
 -- ==========================================================
 
-function process_install(category_name)
-    local list = database[category_name]
-    show_header()
-    print("  " .. c.bold .. c.cyan .. "━━━ " .. category_name .. " Mode ━━━" .. c.reset .. "\n")
+function process_install(folder_id, folder_name)
+    print("  " .. c.yellow .. "[*] Fetching APKs from server..." .. c.reset)
+    local list = load_files(folder_id)
     
+    show_header()
+    print("  " .. c.bold .. c.cyan .. "━━━ " .. folder_name .. " ━━━" .. c.reset .. "\n")
+    
+    if #list == 0 then
+        print("  " .. c.red .. "[!] Folder ini kosong atau server sedang sibuk. Tekan Enter..." .. c.reset)
+        io.read()
+        return
+    end
+
     local rows = {}
     for i, app in ipairs(list) do 
-        table.insert(rows, {tostring(i), {color=c.green, text=app.name}, "Install APK file via curl"})
+        table.insert(rows, {tostring(i), {color=c.green, text=app.name}, "Install APK dari Gofile"})
     end
     table.insert(rows, {"0", {color=c.red, text="Return"}, "Kembali ke Menu Utama"})
     
@@ -136,17 +158,22 @@ function process_install(category_name)
         local app = list[idx]
         local full_path = dl_path .. "temp_" .. idx .. ".apk"
         print("  " .. c.cyan .. "    Downloading: " .. app.name .. c.reset)
-        os.execute(string.format("curl -L -# -o '%s' '%s'", full_path, app.url))
+        local dl_cmd = string.format("curl -L -# -H 'Accept: application/octet-stream' -o '%s' '%s'", full_path, app.url)
+        os.execute(dl_cmd)
         table.insert(files, full_path)
     end
 
     print("\n  " .. c.bold .. c.green .. "[*] Tahap 2: Menginstall semua file (Root)..." .. c.reset)
     for _, path in ipairs(files) do
-        print("  " .. c.yellow .. "    Installing: " .. path .. c.reset)
-        os.execute("su -c 'pm install -r " .. path .. "' < /dev/null")
+        print("  " .. c.yellow .. "    Installing: " .. path .. " ..." .. c.reset)
+        local out = su_exec("pm install -r " .. path)
+        if out and out:match("Success") then
+            print("  " .. c.green .. "    [✓] Success!" .. c.reset)
+        else
+            print("  " .. c.red .. "    [!] Failed/Info: " .. (out or "No output"):gsub("\n", " ") .. c.reset)
+        end
         os.execute("rm " .. path)
     end
-    os.execute("stty sane")
     print("\n  " .. c.bold .. c.green .. "[ ✓ ] Installasi Selesai! Tekan Enter..." .. c.reset)
     io.read()
 end
@@ -185,13 +212,27 @@ function menu_uninstall()
         return 
     end
 
+    print("  " .. c.yellow .. "[?] Anda akan menghapus " .. #targets .. " package. Yakin? (y/n): " .. c.reset)
+    io.write("  ")
+    local confirm = io.read()
+    if confirm:lower() ~= "y" then
+        print("\n  " .. c.bold .. c.red .. "[!] Dibatalkan. Tekan Enter..." .. c.reset)
+        io.read()
+        return
+    end
+
+    print("")
     for _, idx in ipairs(targets) do
         if installed[idx] then
-            print("  " .. c.red .. "    Deleting: " .. installed[idx] .. c.reset)
-            os.execute("su -c 'pm uninstall " .. installed[idx] .. "' < /dev/null > /dev/null 2>&1")
+            print("  " .. c.red .. "    Deleting: " .. installed[idx] .. " ..." .. c.reset)
+            local out = su_exec("pm uninstall " .. installed[idx])
+            if out and out:match("Success") then
+                print("  " .. c.green .. "    [✓] Success!" .. c.reset)
+            else
+                print("  " .. c.yellow .. "    [!] Failed/Info: " .. (out or "No output"):gsub("\n", " ") .. c.reset)
+            end
         end
     end
-    os.execute("stty sane")
     print("\n  " .. c.bold .. c.green .. "[ ✓ ] Uninstall Bersih! Tekan Enter..." .. c.reset)
     io.read()
 end
@@ -201,29 +242,36 @@ end
 -- ==========================================================
 while true do
     show_header()
+    print("  " .. c.yellow .. "[*] Connect to Server API..." .. c.reset)
+    local folders = load_folders()
     
-    local rows = {
-        {"1", {color=c.green, text="Same HWID A10"}, "Koleksi Same HWID (6 APK)"},
-        {"2", {color=c.green, text="Not Same HWID A10"}, "Koleksi Not Same HWID (5 APK)"},
-        {"3", {color=c.magenta, text="Auto Uninstall"}, "Hapus data / client (" .. search_prefix .. ")"},
-        {"0", {color=c.red, text="Exit"}, "Keluar dari installer"}
-    }
-    draw_table("Main Functions", {"ID", "Feature", "Description"}, rows)
+    local rows = {}
+    for i, folder in ipairs(folders) do
+        table.insert(rows, {tostring(i), {color=c.green, text=folder.name}, "Buka Folder Cloud"})
+    end
+    
+    local uninstall_idx = tostring(#folders + 1)
+    local exit_idx = "0"
+    
+    table.insert(rows, {uninstall_idx, {color=c.magenta, text="Auto Uninstall"}, "Hapus data / client (" .. search_prefix .. ")"})
+    table.insert(rows, {exit_idx, {color=c.red, text="Exit"}, "Keluar dari installer"})
+    
+    show_header()
+    draw_table("Gofile Cloud Menu", {"ID", "Folder/Feature", "Description"}, rows)
 
-    io.write("\n  " .. c.bold .. c.yellow .. "▶  Pilih menu: " .. c.reset)
+    io.write("\n  " .. c.bold .. c.yellow .. "▶  Pilih id: " .. c.reset)
     local main_act = io.read()
+    local num = tonumber(main_act)
 
-    if main_act == "1" then 
-        process_install("Same HWID")
-    elseif main_act == "2" then 
-        process_install("Not Same HWID")
-    elseif main_act == "3" then 
-        menu_uninstall()
-    elseif main_act == "0" then 
+    if main_act == exit_idx then 
         print("\n  " .. c.bold .. c.red .. "Sayonara! — Tools ditutup." .. c.reset .. "\n")
         break
+    elseif main_act == uninstall_idx then 
+        menu_uninstall()
+    elseif num and num >= 1 and num <= #folders then 
+        process_install(folders[num].id, folders[num].name)
     else
-        print("\n  " .. c.red .. "  [!] Pilihan tidak valid." .. c.reset)
+        print("\n  " .. c.red .. "  [!] Pilihan tidak valid atau server gagal." .. c.reset)
         os.execute("sleep 1")
     end
 end
