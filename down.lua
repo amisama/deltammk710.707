@@ -64,6 +64,11 @@ function parse_input(input, max)
     return targets
 end
 
+function clear_input_buffer()
+    -- Drain any pending input safely using shell timeout
+    os.execute("sh -c 'while read -r -t 0.1 -n 10000; do :; done'")
+end
+
 function pad(str, target_len)
     if #str > target_len then
         return str:sub(1, target_len - 3) .. "..."
@@ -117,6 +122,7 @@ function process_install(folder_name, list)
     
     if not list or #list == 0 then
         print("  " .. c.red .. "[!] Folder ini kosong atau server sedang sibuk. Tekan Enter..." .. c.reset)
+        clear_input_buffer()
         io.read()
         return
     end
@@ -136,6 +142,7 @@ function process_install(folder_name, list)
     local targets = parse_input(input, #list)
     if #targets == 0 then 
         print("\n  " .. c.bold .. c.red .. "[!] Input tidak valid/typo! Tekan Enter..." .. c.reset)
+        clear_input_buffer()
         io.read()
         return 
     end
@@ -163,6 +170,7 @@ function process_install(folder_name, list)
         os.execute("rm " .. path)
     end
     print("\n  " .. c.bold .. c.green .. "[ ✓ ] Installasi Selesai! Tekan Enter..." .. c.reset)
+    clear_input_buffer()
     io.read()
 end
 
@@ -177,6 +185,7 @@ function menu_uninstall()
     
     if #installed == 0 then 
         print("  " .. c.bold .. c.red .. "[!] Tidak ada package ditemukan. Tekan Enter..." .. c.reset)
+        clear_input_buffer()
         io.read()
         return 
     end
@@ -196,6 +205,7 @@ function menu_uninstall()
     local targets = parse_input(input, #installed)
     if #targets == 0 then 
         print("\n  " .. c.bold .. c.red .. "[!] Input tidak valid/typo! Tekan Enter..." .. c.reset)
+        clear_input_buffer()
         io.read()
         return 
     end
@@ -205,6 +215,7 @@ function menu_uninstall()
     local confirm = io.read()
     if confirm:lower() ~= "y" then
         print("\n  " .. c.bold .. c.red .. "[!] Dibatalkan. Tekan Enter..." .. c.reset)
+        clear_input_buffer()
         io.read()
         return
     end
@@ -222,6 +233,7 @@ function menu_uninstall()
         end
     end
     print("\n  " .. c.bold .. c.green .. "[ ✓ ] Uninstall Bersih! Tekan Enter..." .. c.reset)
+    clear_input_buffer()
     io.read()
 end
 
