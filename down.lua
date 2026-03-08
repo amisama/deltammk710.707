@@ -265,9 +265,6 @@ function inject_delta_key()
     io.read()
 end
 
--- ==========================================================
--- LOOP MENU UTAMA
--- ==========================================================
 while true do
     show_header()
     print("  " .. c.yellow .. "[*] Sinkronisasi Database API..." .. c.reset)
@@ -313,3 +310,4 @@ while true do
         end
     end
 end
+
