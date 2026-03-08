@@ -65,8 +65,8 @@ function parse_input(input, max)
 end
 
 function clear_input_buffer()
-    -- Drain any pending input safely using shell timeout
-    os.execute("sh -c 'while read -r -t 0.1 -n 10000; do :; done'")
+    -- Drain any pending input safely using bash (dash sh doesn't support read -t)
+    os.execute("bash -c 'read -r -t 0.1 -n 10000 2>/dev/null'")
 end
 
 function pad(str, target_len)
