@@ -1,313 +1,320 @@
-local c = {
-    bold = "\27[1m", reset = "\27[0m", dim = "\27[2m",
-    red = "\27[31m", green = "\27[32m", yellow = "\27[33m",
-    blue = "\27[34m", magenta = "\27[35m", cyan = "\27[36m", white = "\27[37m"
-}
+-- ============================================================
+--  No Mercy Tools  |  Termux CLI  |  Simple & Robust
+-- ============================================================
 
-local dl_path = "/sdcard/Download/"
+local DL_PATH    = "/sdcard/Download/"
+local API_URL    = "https://gofile-clone.mrcy-25d.workers.dev"
+local PKG_PREFIX = "com.roblox"
+local DELTA_KEY  = "KEY_d1da50257e7edf4c344e746a942662c8"
+local DELTA_DIR  = "/sdcard/Delta/Internals/Cache/"
 
-local api_url = "https://gofile-clone.mrcy-25d.workers.dev"
 
-function load_database()
-    local raw = exec("curl -s " .. api_url .. "/api/cli/all")
-    local db = {}
-    local folders = {}
-    if raw and raw ~= "EMPTY" and raw ~= "ERROR" then
-        for line in raw:gmatch("[^\r\n]+") do
-            local folder, name, url = line:match("([^|]+)|([^|]+)|([^|]+)")
-            if folder and name and url then
-                if not db[folder] then 
-                    db[folder] = {}
-                    table.insert(folders, folder)
-                end
-                table.insert(db[folder], { name = name, url = url })
-            end
+local function run(cmd)
+    local h = io.popen(cmd .. " 2>/dev/null")
+    if not h then return "" end
+    local out = h:read("*a") or ""
+    h:close()
+    return out:match("^%s*(.-)%s*$")   
+end
+
+
+local function run_root(cmd)
+    local h = io.popen("su -c '" .. cmd .. "' 2>&1")
+    if not h then return "" end
+    local out = h:read("*a") or ""
+    h:close()
+    return out:match("^%s*(.-)%s*$")
+end
+
+
+local function tty_read()
+    local tty = io.open("/dev/tty", "r")
+    if tty then
+        local line = tty:read("*l") or ""
+        tty:close()
+        return line
+    end
+    return io.read("*l") or ""
+end
+
+local function pause(msg)
+    io.write(msg or "\n  Tekan Enter untuk lanjut... ")
+    io.flush()
+    tty_read()
+end
+
+
+local SEP = string.rep("-", 62)
+
+local function clear()
+    os.execute("clear 2>/dev/null || printf '\\033c'")
+end
+
+local function header()
+    clear()
+    print("")
+    print("  " .. SEP)
+    print("   No Mercy Tools v1.0  |  Termux  |  by deltammk710")
+    print("  " .. SEP)
+    print("")
+end
+
+
+local function list_menu(title, items, extra_rows)
+    print("  [ " .. title .. " ]")
+    print("  " .. string.rep("-", 40))
+    for i, item in ipairs(items) do
+        print(string.format("  %-4s %s", "[" .. i .. "]", item))
+    end
+    if extra_rows then
+        for _, row in ipairs(extra_rows) do
+            print(string.format("  %-4s %s", "[" .. row[1] .. "]", row[2]))
         end
     end
-    return db, folders
-end
-
-local search_prefix = "com.roblox"
-
-function exec(cmd)
-    local h = io.popen(cmd)
-    local r = h:read("*a")
-    h:close()
-    return r
-end
-
-function su_exec(cmd)
-    local h = io.popen("su -c '" .. cmd .. "' 2>&1")
-    local r = h:read("*a")
-    h:close()
-    return r
+    print("  " .. string.rep("-", 40))
 end
 
 
-function parse_input(input, max)
+
+local function load_db()
+    print("  Memuat database dari server...")
+    local raw = run("curl -s " .. API_URL .. "/api/cli/all")
+    local db, keys = {}, {}
+    if raw == "" or raw == "EMPTY" or raw == "ERROR" then
+        return db, keys
+    end
+    for line in raw:gmatch("[^\r\n]+") do
+        local folder, name, url = line:match("([^|]+)|([^|]+)|([^|]+)")
+        if folder and name and url then
+            if not db[folder] then
+                db[folder] = {}
+                table.insert(keys, folder)
+            end
+            table.insert(db[folder], { name = name, url = url })
+        end
+    end
+    return db, keys
+end
+
+
+local function parse_input(input, max)
     local targets = {}
     if input == "all" then
-        for i = 1, max do table.insert(targets, i) end
-    else
-        for part in input:gmatch("([^,%s]+)") do
-            local s, e = part:match("(%d+)-(%d+)")
-            if s and e then
-                for i = tonumber(s), tonumber(e) do 
-                    if i >= 1 and i <= max then table.insert(targets, i) end
-                end
-            else
-                local n = tonumber(part)
-                if n and n >= 1 and n <= max then table.insert(targets, n) end
+        for i = 1, max do targets[#targets+1] = i end
+        return targets
+    end
+    for part in input:gmatch("[^,%s]+") do
+        local s, e = part:match("^(%d+)-(%d+)$")
+        if s then
+            for i = tonumber(s), tonumber(e) do
+                if i >= 1 and i <= max then targets[#targets+1] = i end
             end
+        else
+            local n = tonumber(part)
+            if n and n >= 1 and n <= max then targets[#targets+1] = n end
         end
     end
     return targets
 end
 
-function clear_input_buffer()
-    -- Drain any pending input safely using bash (dash sh doesn't support read -t)
-    os.execute("bash -c 'read -r -t 0.1 -n 10000 2>/dev/null'")
-end
 
-function pad(str, target_len)
-    if #str > target_len then
-        return str:sub(1, target_len - 3) .. "..."
-    end
-    return str .. string.rep(" ", math.max(0, target_len - #str))
-end
-
-function draw_table(title, headers, rows)
-    local w1, w2, w3 = 4, 30, 36
-    
-    print("  " .. c.bold .. c.white .. "╭" .. string.rep("─", w1+2) .. "┬" .. string.rep("─", w2+2) .. "┬" .. string.rep("─", w3+2) .. "╮" .. c.reset)
-    print("  " .. c.bold .. c.white .. "│ " .. c.cyan .. pad(headers[1], w1) .. c.reset .. c.bold .. c.white .. " │ " .. c.white .. pad(headers[2], w2) .. c.reset .. c.bold .. c.white .. " │ " .. c.dim .. pad(headers[3], w3) .. c.reset .. c.bold .. c.white .. " │" .. c.reset)
-    print("  " .. c.bold .. c.white .. "├" .. string.rep("─", w1+2) .. "┼" .. string.rep("─", w2+2) .. "┼" .. string.rep("─", w3+2) .. "┤" .. c.reset)
-    for _, row in ipairs(rows) do
-        local id_text = row[1]
-        local feat_color = row[2].color
-        local feat_text = row[2].text
-        local desc_text = row[3]
-        
-        print("  " .. c.bold .. c.white .. "│ " .. c.reset .. c.cyan .. pad(id_text, w1) .. c.reset .. c.bold .. c.white .. " │ " .. feat_color .. pad(feat_text, w2) .. c.reset .. c.bold .. c.white .. " │ " .. c.dim .. pad(desc_text, w3) .. c.reset .. c.bold .. c.white .. " │" .. c.reset)
-    end
-    print("  " .. c.bold .. c.white .. "╰" .. string.rep("─", w1+2) .. "┴" .. string.rep("─", w2+2) .. "┴" .. string.rep("─", w3+2) .. "╯" .. c.reset)
-end
-
-function show_header()
-    os.execute("clear")
-    local banner = c.bold .. c.cyan .. [[
-  _   _         __  __                     
- | \ | | ___   |  \/  | ___ _ __ ___ _   _ 
- |  \| |/ _ \  | |\/| |/ _ \ '__/ __| | | |
- | |\  | (_) | | |  | |  __/ | | (__| |_| |
- |_| \_|\___/  |_|  |_|\___|_|  \___|\__, |
-                                     |___/ ]] .. c.reset
-
-    for line in banner:gmatch("([^\n]*)\n?") do
-        if line ~= "" then print("    " .. line) end
-    end
+local function do_install(folder_name, list)
+    header()
+    print("  [ Install APK : " .. folder_name .. " ]")
     print("")
-    print("  ╭─────────────────────────────────────────────────────────────────╮")
-    print("  │ " .. c.bold .. c.yellow .. "No Mercy Tools v1.0" .. c.reset .. "   " .. c.green .. "Status: Active" .. c.reset .. "     " .. c.magenta .. "Termux Mode: Target" .. c.reset .. " │")
-    print("  ╰─────────────────────────────────────────────────────────────────╯\n")
-end
 
--- ==========================================================
--- CORE LOGIC
--- ==========================================================
-
-function process_install(folder_name, list)
-    show_header()
-    print("  " .. c.bold .. c.cyan .. "━━━ " .. folder_name .. " ━━━" .. c.reset .. "\n")
-    
     if not list or #list == 0 then
-        print("  " .. c.red .. "[!] Folder ini kosong atau server sedang sibuk. Tekan Enter..." .. c.reset)
-        clear_input_buffer()
-        io.read()
+        print("  [!] Folder kosong atau server tidak merespons.")
+        pause()
         return
     end
 
-    local rows = {}
-    for i, app in ipairs(list) do 
-        table.insert(rows, {tostring(i), {color=c.green, text=app.name}, "Install APK dari Gofile"})
+    local item_names = {}
+    for _, app in ipairs(list) do
+        item_names[#item_names+1] = app.name
     end
-    table.insert(rows, {"0", {color=c.red, text="Return"}, "Kembali ke Menu Utama"})
-    
-    draw_table("APK List", {"ID", "APK Name", "Description"}, rows)
-    
-    io.write("\n  " .. c.bold .. c.yellow .. "▶  Pilih APK (Contoh: 1-5 | 1,3 | 0): " .. c.reset)
-    local input = io.read()
-    if input == "0" then return end
-    
+    list_menu("Pilih APK", item_names, { {"0", "Kembali"} })
+
+    io.write("  Pilih (contoh: 1  |  1,3  |  1-5  |  all  |  0): ")
+    io.flush()
+    local input = tty_read()
+    if input == "0" or input == "" then return end
+
     local targets = parse_input(input, #list)
-    if #targets == 0 then 
-        print("\n  " .. c.bold .. c.red .. "[!] Input tidak valid/typo! Tekan Enter..." .. c.reset)
-        clear_input_buffer()
-        io.read()
-        return 
+    if #targets == 0 then
+        print("  [!] Input tidak valid.")
+        pause()
+        return
     end
 
-    print("\n  " .. c.bold .. c.yellow .. "[*] Tahap 1: Mendownload file ke " .. c.reset .. c.cyan .. dl_path .. c.reset)
-    local files = {}
+
+    print("")
+    print("  >> Mendownload " .. #targets .. " file ke " .. DL_PATH)
+    local downloaded = {}
     for _, idx in ipairs(targets) do
-        local app = list[idx]
-        local full_path = dl_path .. "temp_" .. idx .. ".apk"
-        print("  " .. c.cyan .. "    Downloading: " .. app.name .. c.reset)
-        local dl_cmd = string.format("curl -L -# -H 'Accept: application/octet-stream' -o '%s' '%s'", full_path, app.url)
-        os.execute(dl_cmd)
-        table.insert(files, full_path)
+        local app  = list[idx]
+        local dest = DL_PATH .. "tmp_nm_" .. idx .. ".apk"
+        print("     Downloading: " .. app.name)
+        
+        local ok = os.execute(
+            string.format("curl -L --fail -s -H 'Accept: application/octet-stream' -o '%s' '%s'",
+                dest, app.url)
+        )
+        if ok == 0 or ok == true then
+            downloaded[#downloaded+1] = { path = dest, name = app.name }
+            print("     -> Selesai: " .. dest)
+        else
+            print("     [!] GAGAL download: " .. app.name)
+        end
     end
 
-    print("\n  " .. c.bold .. c.green .. "[*] Tahap 2: Menginstall semua file (Root)..." .. c.reset)
-    for _, path in ipairs(files) do
-        print("  " .. c.yellow .. "    Installing: " .. path .. " ..." .. c.reset)
-        local out = su_exec("pm install -r " .. path)
-        if out and out:match("Success") then
-            print("  " .. c.green .. "    [✓] Success!" .. c.reset)
+
+    print("")
+    print("  >> Menginstall via Root (pm install)...")
+    for _, f in ipairs(downloaded) do
+        print("     Installing: " .. f.name)
+        local out = run_root("pm install -r " .. f.path)
+        if out:find("Success") then
+            print("     [OK] Sukses!")
         else
-            print("  " .. c.red .. "    [!] Failed/Info: " .. (out or "No output"):gsub("\n", " ") .. c.reset)
+           
+            print("     [!] " .. out:gsub("[\r\n]+", " "))
         end
-        os.execute("rm " .. path)
+        os.execute("rm -f '" .. f.path .. "'")
     end
-    print("\n  " .. c.bold .. c.green .. "[ ✓ ] Installasi Selesai! Tekan Enter..." .. c.reset)
-    clear_input_buffer()
-    io.read()
+
+    print("")
+    print("  >> Instalasi selesai.")
+    pause()
 end
 
-function menu_uninstall()
-    show_header()
-    print("  " .. c.bold .. c.cyan .. "━━━ Uninstall Mode ━━━" .. c.reset .. "\n")
-    print("  " .. c.yellow .. "[*] Scanning packages (" .. search_prefix .. ")..." .. c.reset)
-    
-    local raw = exec("pm list packages | grep " .. search_prefix)
-    local installed = {}
-    for line in raw:gmatch("package:(%S+)") do table.insert(installed, line) end
-    
-    if #installed == 0 then 
-        print("  " .. c.bold .. c.red .. "[!] Tidak ada package ditemukan. Tekan Enter..." .. c.reset)
-        clear_input_buffer()
-        io.read()
-        return 
+
+local function do_uninstall()
+    header()
+    print("  [ Auto Uninstall : " .. PKG_PREFIX .. "* ]")
+    print("")
+    print("  Scanning packages...")
+
+    local raw = run("pm list packages " .. PKG_PREFIX)
+    local pkgs = {}
+    for p in raw:gmatch("package:(%S+)") do
+        pkgs[#pkgs+1] = p
     end
 
-    local rows = {}
-    for i, pkg in ipairs(installed) do
-        table.insert(rows, {tostring(i), {color=c.magenta, text=pkg}, "Package Terinstal"})
-    end
-    table.insert(rows, {"0", {color=c.red, text="Return"}, "Kembali ke Menu Utama"})
-    
-    draw_table("Uninstall Packages", {"ID", "Package Name", "Description"}, rows)
-
-    io.write("\n  " .. c.bold .. c.yellow .. "▶  Pilih buat dihapus (1-5 | all | 0): " .. c.reset)
-    local input = io.read()
-    if input == "0" then return end
-
-    local targets = parse_input(input, #installed)
-    if #targets == 0 then 
-        print("\n  " .. c.bold .. c.red .. "[!] Input tidak valid/typo! Tekan Enter..." .. c.reset)
-        clear_input_buffer()
-        io.read()
-        return 
+    if #pkgs == 0 then
+        print("  [!] Tidak ada package yang cocok ditemukan.")
+        pause()
+        return
     end
 
-    print("  " .. c.yellow .. "[?] Anda akan menghapus " .. #targets .. " package. Yakin? (y/n): " .. c.reset)
-    io.write("  ")
-    local confirm = io.read()
+    list_menu("Package Terinstal", pkgs, { {"0", "Kembali"} })
+    io.write("  Pilih (1  |  1,3  |  all  |  0): ")
+    io.flush()
+    local input = tty_read()
+    if input == "0" or input == "" then return end
+
+    local targets = parse_input(input, #pkgs)
+    if #targets == 0 then
+        print("  [!] Input tidak valid.")
+        pause()
+        return
+    end
+
+
+    io.write("  Hapus " .. #targets .. " package? (y/n): ")
+    io.flush()
+    local confirm = tty_read()
     if confirm:lower() ~= "y" then
-        print("\n  " .. c.bold .. c.red .. "[!] Dibatalkan. Tekan Enter..." .. c.reset)
-        clear_input_buffer()
-        io.read()
+        print("  Dibatalkan.")
+        pause()
         return
     end
 
     print("")
     for _, idx in ipairs(targets) do
-        if installed[idx] then
-            print("  " .. c.red .. "    Deleting: " .. installed[idx] .. " ..." .. c.reset)
-            local out = su_exec("pm uninstall " .. installed[idx])
-            if out and out:match("Success") then
-                print("  " .. c.green .. "    [✓] Success!" .. c.reset)
+        local pkg = pkgs[idx]
+        if pkg then
+            print("  Uninstalling: " .. pkg)
+            local out = run_root("pm uninstall " .. pkg)
+            if out:find("Success") then
+                print("  [OK] Sukses!")
             else
-                print("  " .. c.yellow .. "    [!] Failed/Info: " .. (out or "No output"):gsub("\n", " ") .. c.reset)
+                print("  [!] " .. out:gsub("[\r\n]+", " "))
             end
         end
     end
-    print("\n  " .. c.bold .. c.green .. "[ ✓ ] Uninstall Bersih! Tekan Enter..." .. c.reset)
-    clear_input_buffer()
-    io.read()
+
+    print("")
+    print("  >> Uninstall selesai.")
+    pause()
 end
 
-function inject_delta_key()
-    show_header()
-    print("  " .. c.bold .. c.cyan .. "━━━ Delta Key Injector ━━━" .. c.reset .. "\n")
-    print("  " .. c.yellow .. "[*] Memasukkan lisensi Delta..." .. c.reset)
-    
-    local target_dir = "/sdcard/Delta/Internals/Cache/"
-    local target_file = target_dir .. "license"
-    local key = "KEY_d1da50257e7edf4c344e746a942662c8"
-    
-    -- Buat foldernya kalau belum ada
-    os.execute("mkdir -p " .. target_dir)
-    
-    -- Tulis key-nya
-    local f = io.open(target_file, "w")
+
+
+local function do_delta_key()
+    header()
+    print("  [ Inject Delta Key ]")
+    print("")
+    print("  Target : " .. DELTA_DIR .. "license")
+    print("  Key    : " .. DELTA_KEY)
+    print("")
+
+    os.execute("mkdir -p '" .. DELTA_DIR .. "'")
+    local f = io.open(DELTA_DIR .. "license", "w")
     if f then
-        f:write(key)
+        f:write(DELTA_KEY)
         f:close()
-        print("  " .. c.green .. "    [✓] Sukses inject key Delta!" .. c.reset)
-        print("  " .. c.cyan .. "    Path: " .. target_file .. c.reset)
+        print("  [OK] Key berhasil di-inject!")
     else
-        print("  " .. c.red .. "    [!] Gagal menulis file license. Pastikan Termux dikasih izin storage." .. c.reset)
+        print("  [!] Gagal menulis file. Pastikan Termux punya izin storage.")
     end
-    
-    print("\n  " .. c.bold .. c.green .. "[ ✓ ] Selesai! Tekan Enter..." .. c.reset)
-    clear_input_buffer()
-    io.read()
+
+    pause()
 end
+
+-- ============================================================
+-- MAIN LOOP
+-- ============================================================
 
 while true do
-    show_header()
-    print("  " .. c.yellow .. "[*] Sinkronisasi Database API..." .. c.reset)
-    local db, folder_keys = load_database()
-    
+    header()
+    local db, folder_keys = load_db()
+
     if #folder_keys == 0 then
-        print("  " .. c.red .. "\n  [!] Belum ada file APK di web Gofile atau server sibuk. Tekan Enter..." .. c.reset)
-        io.read()
+        print("  [!] Tidak ada APK di server atau koneksi gagal.")
+        pause()
     else
-        local rows = {}
-        for i, folder_name in ipairs(folder_keys) do
-            table.insert(rows, {tostring(i), {color=c.green, text=folder_name}, "Buka Folder Cloud (" .. #db[folder_name] .. " File)"})
+        local menu_labels = {}
+        for _, k in ipairs(folder_keys) do
+            menu_labels[#menu_labels+1] = k .. "  (" .. #db[k] .. " file)"
         end
-        
-        local uninstall_idx = tostring(#folder_keys + 1)
-        local delta_key_idx = tostring(#folder_keys + 2)
-        local exit_idx = "0"
-        
-        table.insert(rows, {uninstall_idx, {color=c.magenta, text="Auto Uninstall"}, "Hapus data / client (" .. search_prefix .. ")"})
-        table.insert(rows, {delta_key_idx, {color=c.yellow, text="Inject Delta Key"}, "Auto Bypass Delta License"})
-        table.insert(rows, {exit_idx, {color=c.red, text="Exit"}, "Keluar dari installer"})
-        
-        show_header()
-        draw_table("Gofile Cloud Menu", {"ID", "Folder/Feature", "Description"}, rows)
 
-        io.write("\n  " .. c.bold .. c.yellow .. "▶  Pilih id: " .. c.reset)
-        local main_act = io.read()
-        local num = tonumber(main_act)
+        local idx_uninstall  = #folder_keys + 1
+        local idx_delta      = #folder_keys + 2
 
-        if main_act == exit_idx then 
-            print("\n  " .. c.bold .. c.red .. "Sayonara! — Tools ditutup." .. c.reset .. "\n")
+        list_menu("Gofile Cloud Menu", menu_labels, {
+            { tostring(idx_uninstall), "Auto Uninstall  (hapus " .. PKG_PREFIX .. "*)" },
+            { tostring(idx_delta),     "Inject Delta Key" },
+            { "0",                     "Exit" },
+        })
+
+        io.write("  Pilih: ")
+        io.flush()
+        local choice = tty_read()
+        local num    = tonumber(choice)
+
+        if choice == "0" then
+            print("\n  Bye!\n")
             break
-        elseif main_act == uninstall_idx then 
-            menu_uninstall()
-        elseif main_act == delta_key_idx then
-            inject_delta_key()
-        elseif num and num >= 1 and num <= #folder_keys then 
-            local fname = folder_keys[num]
-            process_install(fname, db[fname])
+        elseif num == idx_uninstall then
+            do_uninstall()
+        elseif num == idx_delta then
+            do_delta_key()
+        elseif num and num >= 1 and num <= #folder_keys then
+            do_install(folder_keys[num], db[folder_keys[num]])
         else
-            print("\n  " .. c.red .. "  [!] Pilihan tidak valid." .. c.reset)
+            print("  [!] Pilihan tidak valid.")
             os.execute("sleep 1")
         end
     end
 end
-
