@@ -237,6 +237,34 @@ function menu_uninstall()
     io.read()
 end
 
+function inject_delta_key()
+    show_header()
+    print("  " .. c.bold .. c.cyan .. "━━━ Delta Key Injector ━━━" .. c.reset .. "\n")
+    print("  " .. c.yellow .. "[*] Memasukkan lisensi Delta..." .. c.reset)
+    
+    local target_dir = "/sdcard/Delta/Internals/Cache/"
+    local target_file = target_dir .. "license"
+    local key = "KEY_d1da50257e7edf4c344e746a942662c8"
+    
+    -- Buat foldernya kalau belum ada
+    os.execute("mkdir -p " .. target_dir)
+    
+    -- Tulis key-nya
+    local f = io.open(target_file, "w")
+    if f then
+        f:write(key)
+        f:close()
+        print("  " .. c.green .. "    [✓] Sukses inject key Delta!" .. c.reset)
+        print("  " .. c.cyan .. "    Path: " .. target_file .. c.reset)
+    else
+        print("  " .. c.red .. "    [!] Gagal menulis file license. Pastikan Termux dikasih izin storage." .. c.reset)
+    end
+    
+    print("\n  " .. c.bold .. c.green .. "[ ✓ ] Selesai! Tekan Enter..." .. c.reset)
+    clear_input_buffer()
+    io.read()
+end
+
 -- ==========================================================
 -- LOOP MENU UTAMA
 -- ==========================================================
@@ -255,9 +283,11 @@ while true do
         end
         
         local uninstall_idx = tostring(#folder_keys + 1)
+        local delta_key_idx = tostring(#folder_keys + 2)
         local exit_idx = "0"
         
         table.insert(rows, {uninstall_idx, {color=c.magenta, text="Auto Uninstall"}, "Hapus data / client (" .. search_prefix .. ")"})
+        table.insert(rows, {delta_key_idx, {color=c.yellow, text="Inject Delta Key"}, "Auto Bypass Delta License"})
         table.insert(rows, {exit_idx, {color=c.red, text="Exit"}, "Keluar dari installer"})
         
         show_header()
@@ -272,6 +302,8 @@ while true do
             break
         elseif main_act == uninstall_idx then 
             menu_uninstall()
+        elseif main_act == delta_key_idx then
+            inject_delta_key()
         elseif num and num >= 1 and num <= #folder_keys then 
             local fname = folder_keys[num]
             process_install(fname, db[fname])
