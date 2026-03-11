@@ -24,7 +24,7 @@ local APK_LIST = {
     },
     {
         name = "RONIX LITE 04  (2.710.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/RONIX.LITE.03-2.710.707.apk.apk",
+        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/RONIX.LITE.04-2.710.707.apk.apk",
     },
     {
         name = "RONIX LITE 05  (2.710.707)",
