@@ -30,6 +30,26 @@ local APK_LIST = {
         name = "RONIX LITE 05  (2.710.707)",
         url  = "https://github.com/amisama/deltammk710.707/releases/download/1/RONIX.LITE.05-2.710.707.apk.apk",
     },
+    {
+        name = "XINOR 64 01 (2.710.707)",
+        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/XINOR.64.1-2.710.707.apk.apk",
+    },
+    {
+        name = "XINOR 64 02 (2.710.707)",
+        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/XINOR.64.2-2.710.707.apk.apk",
+    },
+    {
+        name = "XINOR 64 03 (2.710.707)",
+        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/XINOR.64.3-2.710.707.apk.apk",
+    },
+    {
+        name = "XINOR 64 04 (2.710.707)",
+        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/XINOR.64.4-2.710.707.apk.apk",
+    },
+    {
+        name = "XINOR 64 05 (2.710.707)",
+        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/XINOR.64.5-2.710.707.apk.apk",
+    },
 }
 
 -- ============================================================
