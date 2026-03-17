@@ -11,44 +11,24 @@ local RONIX_DIR = "/sdcard/RonixExploit/internal/"
 -- ============================================================
 local APK_LIST = {
     {
-        name = "RONIX LITE 01  (2.710.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/RONIX.LITE.01-2.710.707.apk.apk",
+        name = "XINOR 01 (2.711.876)",
+        url  = "https://github.com/gopayrei1-design/lite-hitam/releases/download/ronix_cuy/XINOR.1-2.711.876.apk.apk",
     },
     {
-        name = "RONIX LITE 02  (2.710.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/RONIX.LITE.02-2.710.707.apk.apk",
+        name = "XINOR 02 (2.711.876)",
+        url  = "https://github.com/gopayrei1-design/lite-hitam/releases/download/ronix_cuy/XINOR.2-2.711.876.apk.apk",
     },
     {
-        name = "RONIX LITE 03  (2.710.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/RONIX.LITE.03-2.710.707.apk.apk",
+        name = "XINOR 03 (2.711.876)",
+        url  = "https://github.com/gopayrei1-design/lite-hitam/releases/download/ronix_cuy/XINOR.3-2.711.876.apk.apk",
     },
     {
-        name = "RONIX LITE 04  (2.710.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/RONIX.LITE.04-2.710.707.apk.apk",
+        name = "XINOR 04 (2.711.876)",
+        url  = "https://github.com/gopayrei1-design/lite-hitam/releases/download/ronix_cuy/XINOR.4-2.711.876.apk.apk",
     },
     {
-        name = "RONIX LITE 05  (2.710.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/RONIX.LITE.05-2.710.707.apk.apk",
-    },
-    {
-        name = "XINOR 64 01 (2.710.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/XINOR.64.1-2.710.707.apk.apk",
-    },
-    {
-        name = "XINOR 64 02 (2.710.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/XINOR.64.2-2.710.707.apk.apk",
-    },
-    {
-        name = "XINOR 64 03 (2.710.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/XINOR.64.3-2.710.707.apk.apk",
-    },
-    {
-        name = "XINOR 64 04 (2.710.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/XINOR.64.4-2.710.707.apk.apk",
-    },
-    {
-        name = "XINOR 64 05 (2.710.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/XINOR.64.5-2.710.707.apk.apk",
+        name = "XINOR 05 (2.711.876)",
+        url  = "https://github.com/gopayrei1-design/lite-hitam/releases/download/ronix_cuy/XINOR.5-2.711.876.apk.apk",
     },
 }
 
