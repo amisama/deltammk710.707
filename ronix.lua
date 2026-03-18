@@ -3,7 +3,7 @@
 -- ============================================================
 
 local DL_PATH  = "/sdcard/Download/"
-local RONIX_KEY = "QeiSUyPiTuSbFKEQBELRkTttlhgZfMYp"
+
 local RONIX_DIR = "/sdcard/RonixExploit/internal/"
 
 -- ============================================================
