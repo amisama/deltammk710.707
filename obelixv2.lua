@@ -11,24 +11,20 @@ local RONIX_DIR = "/sdcard/RonixExploit/internal/"
 -- ============================================================
 local APK_LIST = {
     {
-        name = "RONIX LITE 01  (2.711.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/RONIXORI.1_2.711.876.apk",
+        name = "NOMERCY LITE 01",
+        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/NOMERCY.01-2.714.1091.apk",
     },
     {
-        name = "RONIX LITE 02  (2.711.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/RONIXORI.2_2.711.876.apk",
+        name = "NOMERCY LITE 02  (2.711.707)",
+        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/NOMERCY.02-2.714.1091.apk",
     },
     {
-        name = "RONIX LITE 03  (2.711.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/RONIXORI.3_2.711.876.apk",
+        name = "NOMERCY LITE 03  (2.711.707)",
+        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/NOMERCY.03-2.714.1091.apk",
     },
     {
-        name = "RONIX LITE 04  (2.711.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/RONIXORI.4_2.711.876.apk",
-    },
-    {
-        name = "RONIX LITE 05  (2.711.707)",
-        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/RONIXORI.5_2.711.876.apk",
+        name = "NOMERCY LITE 04  (2.711.707)",
+        url  = "https://github.com/amisama/deltammk710.707/releases/download/1/NOMERCY.04-2.714.1091.apk",
     },
 }
 
