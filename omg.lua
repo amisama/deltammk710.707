@@ -221,21 +221,58 @@ function Http.post(endpoint, data)
     local url = CONFIG.API_URL .. endpoint
     local jsonData = HttpService:JSONEncode(data)
 
+    -- Detect which HTTP function is available
+    local httpFunc = nil
+    local httpName = "none"
+    if request then
+        httpFunc = request; httpName = "request"
+    elseif http_request then
+        httpFunc = http_request; httpName = "http_request"
+    elseif syn and syn.request then
+        httpFunc = syn.request; httpName = "syn.request"
+    elseif http and http.request then
+        httpFunc = http.request; httpName = "http.request"
+    elseif fluxus and fluxus.request then
+        httpFunc = fluxus.request; httpName = "fluxus.request"
+    end
+
+    if not httpFunc then
+        GUI.setLine("http_err", "ERROR: No HTTP function found!", Color3.fromRGB(255, 0, 0))
+        GUI.setLine("http_avail", "request=" .. tostring(request ~= nil) .. " http_request=" .. tostring(http_request ~= nil), Color3.fromRGB(255, 100, 100))
+        return false, nil
+    end
+
+    GUI.setLine("http_func", "HTTP: " .. httpName, Color3.fromRGB(150, 150, 150))
+    GUI.setLine("http_url", "URL: " .. url, Color3.fromRGB(150, 150, 150))
+
+    local lastErr = ""
     for attempt = 1, CONFIG.MAX_RETRIES do
+        GUI.setLine("http_attempt", "Attempt " .. attempt .. "/" .. CONFIG.MAX_RETRIES .. "...", Color3.fromRGB(255, 200, 0))
+
         local success, response = pcall(function()
-            if request then
-                return request({Url = url, Method = "POST", Headers = {["Content-Type"] = "application/json", ["Authorization"] = "Bearer " .. CONFIG.API_KEY, ["X-Tracker-Version"] = "2.0"}, Body = jsonData})
-            elseif http_request then
-                return http_request({Url = url, Method = "POST", Headers = {["Content-Type"] = "application/json", ["Authorization"] = "Bearer " .. CONFIG.API_KEY, ["X-Tracker-Version"] = "2.0"}, Body = jsonData})
-            elseif syn and syn.request then
-                return syn.request({Url = url, Method = "POST", Headers = {["Content-Type"] = "application/json", ["Authorization"] = "Bearer " .. CONFIG.API_KEY, ["X-Tracker-Version"] = "2.0"}, Body = jsonData})
-            else
-                error("No HTTP function available")
-            end
+            return httpFunc({
+                Url = url,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json",
+                    ["Authorization"] = "Bearer " .. CONFIG.API_KEY,
+                    ["X-Tracker-Version"] = "2.0",
+                },
+                Body = jsonData,
+            })
         end)
 
-        if success and response and (response.StatusCode == 200 or response.StatusCode == 201) then
-            return true, response
+        if success and response then
+            local code = response.StatusCode or response.status_code or 0
+            GUI.setLine("http_code", "Response: " .. tostring(code), Color3.fromRGB(150, 150, 150))
+            if code == 200 or code == 201 then
+                return true, response
+            else
+                lastErr = "HTTP " .. tostring(code) .. ": " .. tostring(response.Body or response.body or "")
+            end
+        elseif not success then
+            lastErr = tostring(response)
+            GUI.setLine("http_pcall_err", "pcall error: " .. string.sub(lastErr, 1, 80), Color3.fromRGB(255, 80, 80))
         end
 
         if attempt < CONFIG.MAX_RETRIES then
@@ -243,6 +280,7 @@ function Http.post(endpoint, data)
         end
     end
 
+    GUI.setLine("http_final_err", "FAILED: " .. string.sub(lastErr, 1, 100), Color3.fromRGB(255, 0, 0))
     return false, nil
 end
 
