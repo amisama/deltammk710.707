@@ -357,13 +357,24 @@ function BaseAdapter:getServerData() return nil end
 function BaseAdapter:collectAll()
     local data = {stats = {}, inventory = {}, currency = {}, progress = {}, serverData = nil}
 
-    local ok, err
-    ok, err = pcall(function() data.stats = self:getStats() end)
-    ok, err = pcall(function() data.inventory = self:getInventory() end)
-    ok, err = pcall(function() data.currency = self:getCurrency() end)
-    ok, err = pcall(function() data.progress = self:getProgress() end)
-    ok, err = pcall(function() data.serverData = self:getServerData() end)
+    local steps = {
+        {"stats",      function() data.stats = self:getStats() end},
+        {"inventory",  function() data.inventory = self:getInventory() end},
+        {"currency",   function() data.currency = self:getCurrency() end},
+        {"progress",   function() data.progress = self:getProgress() end},
+    }
 
+    for i, step in ipairs(steps) do
+        local stepName = step[1]
+        local stepFn   = step[2]
+        GUI.setLine("collect_step", "Collect [" .. i .. "/" .. #steps .. "] " .. stepName .. "...", Color3.fromRGB(255, 200, 0))
+        local ok, err = pcall(stepFn)
+        if not ok then
+            GUI.setLine("collect_err_" .. stepName, "WARN: " .. stepName .. " failed: " .. string.sub(tostring(err), 1, 60), Color3.fromRGB(255, 150, 50))
+        end
+    end
+
+    GUI.setLine("collect_step", "Collect done", Color3.fromRGB(60, 255, 120))
     return data
 end
 
@@ -482,26 +493,15 @@ function SailorPieceAdapter:getInventory()
 end
 
 function SailorPieceAdapter:getServerData()
-    -- Try GetPlayerData RemoteFunction (CONFIRMED exists)
-    local serverData = nil
-
-    pcall(function()
-        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-        if remotes then
-            local getPlayerData = remotes:FindFirstChild("GetPlayerData")
-            if getPlayerData and getPlayerData:IsA("RemoteFunction") then
-                serverData = getPlayerData:InvokeServer()
-            end
-        end
-    end)
-
-    return serverData
+    -- DISABLED: InvokeServer() can yield forever and hang the script.
+    -- All needed data is already available from Player.Data and leaderstats folders.
+    return nil
 end
 
 function SailorPieceAdapter:getProgress()
     local progress = {}
 
-    -- Level & exp from Data (CONFIRMED)
+    -- Level & exp from Data (CONFIRMED - local, no yield)
     local dataFolder = LocalPlayer:FindFirstChild("Data")
     if dataFolder then
         local level = dataFolder:FindFirstChild("Level")
@@ -512,27 +512,9 @@ function SailorPieceAdapter:getProgress()
         if statPoints then progress.StatPoints = statPoints.Value end
     end
 
-    -- Try to get artifact data
-    pcall(function()
-        local remoteFunctions = ReplicatedStorage:FindFirstChild("RemoteFunctions")
-        if remoteFunctions then
-            local getArtifact = remoteFunctions:FindFirstChild("GetArtifactData")
-            if getArtifact then
-                progress.Artifacts = getArtifact:InvokeServer()
-            end
-        end
-    end)
-
-    -- Try to get total stats
-    pcall(function()
-        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-        if remotes then
-            local getTotalStats = remotes:FindFirstChild("GetTotalStats")
-            if getTotalStats then
-                progress.TotalStats = getTotalStats:InvokeServer()
-            end
-        end
-    end)
+    -- DISABLED: InvokeServer() calls removed to prevent infinite yield.
+    -- GetArtifactData and GetTotalStats can hang the entire script.
+    -- Core progress data (Level/Exp/StatPoints) is already captured above.
 
     return progress
 end
