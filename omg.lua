@@ -783,17 +783,90 @@ local function main()
     GUI.setLine("init", "Game: " .. gameName .. " | Adapter: " .. adapter.gameName, Color3.fromRGB(120, 200, 255))
     task.wait(0.5)
 
-    -- Start tracking
+    -- Step 1: Test data collection
+    GUI.setLine("step1", "[1] Collecting data...", Color3.fromRGB(255, 200, 0))
+    task.wait(0.2)
+
+    local collectOk, collectErr = pcall(function()
+        local testData = adapter:collectAll()
+        local statCount = 0
+        if testData and testData.stats then
+            for _ in pairs(testData.stats) do statCount = statCount + 1 end
+        end
+        GUI.setLine("step1", "[1] Data OK - " .. statCount .. " stats found", Color3.fromRGB(60, 255, 120))
+    end)
+    if not collectOk then
+        GUI.setLine("step1", "[1] COLLECT ERROR: " .. string.sub(tostring(collectErr), 1, 100), Color3.fromRGB(255, 0, 0))
+        GUI.setStatus("ERR", Color3.fromRGB(255, 0, 0))
+        return
+    end
+    task.wait(0.2)
+
+    -- Step 2: Test payload build
+    GUI.setLine("step2", "[2] Building payload...", Color3.fromRGB(255, 200, 0))
+    task.wait(0.2)
+
+    local payload = nil
+    local buildOk, buildErr = pcall(function()
+        payload = Tracker.buildPayload(adapter, gameName, placeId)
+        GUI.setLine("step2", "[2] Payload OK - player: " .. tostring(payload.player.username), Color3.fromRGB(60, 255, 120))
+    end)
+    if not buildOk then
+        GUI.setLine("step2", "[2] BUILD ERROR: " .. string.sub(tostring(buildErr), 1, 100), Color3.fromRGB(255, 0, 0))
+        GUI.setStatus("ERR", Color3.fromRGB(255, 0, 0))
+        return
+    end
+    task.wait(0.2)
+
+    -- Step 3: Test JSON encode
+    GUI.setLine("step3", "[3] Encoding JSON...", Color3.fromRGB(255, 200, 0))
+    task.wait(0.2)
+
+    local jsonOk, jsonErr = pcall(function()
+        local json = HttpService:JSONEncode(payload)
+        GUI.setLine("step3", "[3] JSON OK - " .. #json .. " bytes", Color3.fromRGB(60, 255, 120))
+    end)
+    if not jsonOk then
+        GUI.setLine("step3", "[3] JSON ERROR: " .. string.sub(tostring(jsonErr), 1, 100), Color3.fromRGB(255, 0, 0))
+        GUI.setStatus("ERR", Color3.fromRGB(255, 0, 0))
+        return
+    end
+    task.wait(0.2)
+
+    -- Step 4: Test HTTP
+    GUI.setLine("step4", "[4] Testing HTTP...", Color3.fromRGB(255, 200, 0))
+    task.wait(0.2)
+
+    local httpAvail = request or http_request or (syn and syn.request) or (http and http.request) or (fluxus and fluxus.request)
+    if httpAvail then
+        GUI.setLine("step4", "[4] HTTP function available", Color3.fromRGB(60, 255, 120))
+    else
+        GUI.setLine("step4", "[4] NO HTTP FUNCTION!", Color3.fromRGB(255, 0, 0))
+        GUI.setStatus("ERR", Color3.fromRGB(255, 0, 0))
+        return
+    end
+    task.wait(0.3)
+
+    -- All checks passed, start loop
+    GUI.setLine("step5", "[5] Starting tracker loop...", Color3.fromRGB(60, 255, 120))
+    task.wait(0.3)
+
     Tracker.startLoop(adapter, gameName, placeId)
 end
 
 local success, err = pcall(main)
 if not success then
+    -- Show error on GUI if it exists
+    pcall(function()
+        GUI.setStatus("CRASH", Color3.fromRGB(255, 0, 0))
+        GUI.setLine("crash_err", "CRASH: " .. string.sub(tostring(err), 1, 150), Color3.fromRGB(255, 0, 0))
+    end)
+    -- Also show notification
     pcall(function()
         game:GetService("StarterGui"):SetCore("SendNotification", {
             Title = "Tracker Error",
             Text = tostring(err),
-            Duration = 10,
+            Duration = 15,
         })
     end)
 end
