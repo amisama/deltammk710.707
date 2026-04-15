@@ -1,18 +1,19 @@
 --[[
-    DIAGNOSE GUI INVENTORY
-    Scan PlayerGui untuk cari dimana items disimpan.
-    TIDAK pakai InvokeServer - 100% local, tidak akan hang.
+    DEEP SCAN StorageUI + InventoryPanelUI
     
-    INSTRUKSI: Buka inventory/tas di game DULU sebelum execute script ini!
+    INSTRUKSI:
+    1. Buka INVENTORY di game (klik icon tas/inventory)
+    2. Buka STORAGE juga kalau ada
+    3. Baru execute script ini
+    4. Screenshot hasilnya
 ]]
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Simple GUI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "DiagnoseGuiInv"
+screenGui.Name = "DeepScanGui"
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
@@ -32,7 +33,6 @@ layout.Padding = UDim.new(0, 2)
 layout.Parent = frame
 
 local lineCount = 0
-
 local function addLine(text, color)
     lineCount = lineCount + 1
     color = color or Color3.fromRGB(200, 200, 200)
@@ -42,7 +42,7 @@ local function addLine(text, color)
     label.BackgroundTransparency = 1
     label.TextColor3 = color
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.TextSize = 11
+    label.TextSize = 10
     label.Font = Enum.Font.RobotoMono
     label.TextWrapped = true
     label.Text = text
@@ -56,130 +56,147 @@ end
 
 screenGui.Parent = PlayerGui
 
-addHeader("GUI INVENTORY SCAN")
-addLine("Player: " .. LocalPlayer.Name)
+addHeader("DEEP SCAN - StorageUI + InventoryPanelUI")
 
--- Step 1: Find InventoryPanelUI
-addHeader("STEP 1: InventoryPanelUI")
-local invUI = PlayerGui:FindFirstChild("InventoryPanelUI")
-if not invUI then
-    addLine("InventoryPanelUI NOT FOUND", Color3.fromRGB(255, 100, 100))
-    addLine("Coba buka inventory di game dulu, lalu execute ulang", Color3.fromRGB(255, 255, 0))
-else
-    addLine("FOUND InventoryPanelUI!", Color3.fromRGB(0, 255, 0))
-    
-    -- Deep scan: find all TextLabels and TextButtons (item names)
-    local function scanChildren(parent, depth, maxDepth)
-        if depth > maxDepth then return end
-        for _, child in ipairs(parent:GetChildren()) do
-            local info = string.rep("  ", depth) .. child.Name .. " [" .. child.ClassName .. "]"
-            
-            -- Show text content for labels/buttons
-            if child:IsA("TextLabel") or child:IsA("TextButton") then
-                local text = child.Text or ""
-                if text ~= "" and text ~= " " then
-                    info = info .. ' = "' .. string.sub(text, 1, 80) .. '"'
-                    addLine(info, Color3.fromRGB(255, 255, 100))
-                else
-                    addLine(info, Color3.fromRGB(150, 150, 150))
-                end
-            elseif child:IsA("ImageLabel") or child:IsA("ImageButton") then
-                local img = child.Image or ""
-                if img ~= "" then
-                    info = info .. " img=" .. string.sub(img, 1, 40)
-                end
-                addLine(info, Color3.fromRGB(150, 200, 255))
-            elseif child:IsA("Frame") or child:IsA("ScrollingFrame") then
-                local childCount = #child:GetChildren()
-                info = info .. " (" .. childCount .. " children)"
-                addLine(info, Color3.fromRGB(100, 255, 200))
-                scanChildren(child, depth + 1, maxDepth)
-            else
-                addLine(info, Color3.fromRGB(150, 150, 150))
+-- Collect all TextLabels/TextButtons with non-empty text
+local function collectTexts(parent, results, path, maxDepth, depth)
+    depth = depth or 0
+    if depth > (maxDepth or 8) then return end
+    for _, child in ipairs(parent:GetChildren()) do
+        local childPath = path .. "." .. child.Name
+        if (child:IsA("TextLabel") or child:IsA("TextButton")) then
+            local text = child.Text or ""
+            text = text:gsub("%s+", " "):sub(1, 100)
+            if text ~= "" and text ~= " " and text ~= "0" and text ~= "x0" then
+                table.insert(results, {
+                    path = childPath,
+                    class = child.ClassName,
+                    text = text,
+                    visible = child.Visible,
+                    parentVisible = child.Parent and child.Parent.Visible or true,
+                })
             end
         end
+        collectTexts(child, results, childPath, maxDepth, depth + 1)
     end
-    
-    scanChildren(invUI, 1, 5)
 end
 
--- Step 2: Find ShopUI (might have owned items)
-addHeader("STEP 2: ShopUI")
-local shopUI = PlayerGui:FindFirstChild("ShopUI")
-if shopUI then
-    addLine("FOUND ShopUI", Color3.fromRGB(0, 255, 0))
-    local function findTexts(parent, depth)
-        if depth > 3 then return end
-        for _, child in ipairs(parent:GetChildren()) do
-            if (child:IsA("TextLabel") or child:IsA("TextButton")) and child.Text ~= "" and child.Text ~= " " then
-                addLine(string.rep("  ", depth) .. child.Name .. ' = "' .. string.sub(child.Text, 1, 60) .. '"', Color3.fromRGB(255, 200, 100))
+-- Collect all item-like frames (frames with ImageLabel + TextLabel children = item slot)
+local function collectItemSlots(parent, results, path, maxDepth, depth)
+    depth = depth or 0
+    if depth > (maxDepth or 8) then return end
+    for _, child in ipairs(parent:GetChildren()) do
+        local childPath = path .. "." .. child.Name
+        if child:IsA("Frame") or child:IsA("ImageButton") or child:IsA("TextButton") or child:IsA("ImageLabel") then
+            -- Check if this looks like an item slot (has image + text children)
+            local hasImage = false
+            local hasText = false
+            local textContent = ""
+            local imageId = ""
+            for _, sub in ipairs(child:GetChildren()) do
+                if sub:IsA("ImageLabel") or sub:IsA("ImageButton") then
+                    hasImage = true
+                    if sub.Image ~= "" then imageId = sub.Image end
+                end
+                if sub:IsA("TextLabel") or sub:IsA("TextButton") then
+                    if sub.Text ~= "" and sub.Text ~= " " then
+                        hasText = true
+                        textContent = textContent .. sub.Text .. " | "
+                    end
+                end
             end
-            findTexts(child, depth + 1)
+            if hasText then
+                table.insert(results, {
+                    path = childPath,
+                    class = child.ClassName,
+                    text = textContent:sub(1, 120),
+                    hasImage = hasImage,
+                    childCount = #child:GetChildren(),
+                })
+            end
         end
+        collectItemSlots(child, results, childPath, maxDepth, depth + 1)
     end
-    findTexts(shopUI, 1)
-else
-    addLine("ShopUI not found", Color3.fromRGB(150, 150, 150))
 end
 
--- Step 3: Find StorageUI
-addHeader("STEP 3: StorageUI")
+-- ========== SCAN StorageUI ==========
+addHeader("STORAGE UI - All text content")
 local storageUI = PlayerGui:FindFirstChild("StorageUI")
 if storageUI then
-    addLine("FOUND StorageUI", Color3.fromRGB(0, 255, 0))
-    local function findTexts(parent, depth)
-        if depth > 4 then return end
-        for _, child in ipairs(parent:GetChildren()) do
-            if (child:IsA("TextLabel") or child:IsA("TextButton")) and child.Text ~= "" and child.Text ~= " " then
-                addLine(string.rep("  ", depth) .. child.Name .. ' = "' .. string.sub(child.Text, 1, 60) .. '"', Color3.fromRGB(255, 200, 100))
-            end
-            findTexts(child, depth + 1)
+    local texts = {}
+    collectTexts(storageUI, texts, "StorageUI", 8)
+    addLine("Found " .. #texts .. " text elements", Color3.fromRGB(255, 255, 0))
+    for i, t in ipairs(texts) do
+        if i > 100 then
+            addLine("... truncated (" .. #texts .. " total)", Color3.fromRGB(255, 100, 100))
+            break
         end
+        local vis = t.visible and "V" or "H"
+        addLine("[" .. vis .. "] " .. t.text, Color3.fromRGB(200, 255, 200))
+        addLine("    @ " .. t.path, Color3.fromRGB(100, 100, 100))
     end
-    findTexts(storageUI, 1)
+    
+    addHeader("STORAGE UI - Item-like slots")
+    local slots = {}
+    collectItemSlots(storageUI, slots, "StorageUI", 8)
+    addLine("Found " .. #slots .. " item-like elements", Color3.fromRGB(255, 255, 0))
+    for i, s in ipairs(slots) do
+        if i > 60 then
+            addLine("... truncated (" .. #slots .. " total)", Color3.fromRGB(255, 100, 100))
+            break
+        end
+        addLine(s.text, Color3.fromRGB(255, 200, 100))
+        addLine("    @ " .. s.path .. " [" .. s.class .. "] children=" .. s.childCount, Color3.fromRGB(100, 100, 100))
+    end
 else
-    addLine("StorageUI not found", Color3.fromRGB(150, 150, 150))
+    addLine("StorageUI not found", Color3.fromRGB(255, 100, 100))
 end
 
--- Step 4: Scan ALL ScreenGuis for anything with "item" or "inventory" in name
-addHeader("STEP 4: All GUIs with item/inventory content")
-for _, gui in ipairs(PlayerGui:GetChildren()) do
-    if gui:IsA("ScreenGui") then
-        local nameLower = gui.Name:lower()
-        if nameLower:find("item") or nameLower:find("inventory") or nameLower:find("bag") 
-           or nameLower:find("equip") or nameLower:find("weapon") or nameLower:find("storage") then
-            local childCount = 0
-            local function countAll(p)
-                for _, c in ipairs(p:GetChildren()) do
-                    childCount = childCount + 1
-                    countAll(c)
-                end
-            end
-            countAll(gui)
-            addLine(gui.Name .. " (" .. childCount .. " total descendants)", Color3.fromRGB(100, 255, 200))
+-- ========== SCAN InventoryPanelUI ==========
+addHeader("INVENTORY PANEL UI - All text content")
+local invUI = PlayerGui:FindFirstChild("InventoryPanelUI")
+if invUI then
+    local texts = {}
+    collectTexts(invUI, texts, "InventoryPanelUI", 8)
+    addLine("Found " .. #texts .. " text elements", Color3.fromRGB(255, 255, 0))
+    for i, t in ipairs(texts) do
+        if i > 100 then
+            addLine("... truncated (" .. #texts .. " total)", Color3.fromRGB(255, 100, 100))
+            break
         end
+        local vis = t.visible and "V" or "H"
+        addLine("[" .. vis .. "] " .. t.text, Color3.fromRGB(200, 255, 200))
+        addLine("    @ " .. t.path, Color3.fromRGB(100, 100, 100))
+    end
+    
+    addHeader("INVENTORY PANEL UI - Item-like slots")
+    local slots = {}
+    collectItemSlots(invUI, slots, "InventoryPanelUI", 8)
+    addLine("Found " .. #slots .. " item-like elements", Color3.fromRGB(255, 255, 0))
+    for i, s in ipairs(slots) do
+        if i > 60 then
+            addLine("... truncated (" .. #slots .. " total)", Color3.fromRGB(255, 100, 100))
+            break
+        end
+        addLine(s.text, Color3.fromRGB(255, 200, 100))
+        addLine("    @ " .. s.path .. " [" .. s.class .. "] children=" .. s.childCount, Color3.fromRGB(100, 100, 100))
+    end
+else
+    addLine("InventoryPanelUI not found", Color3.fromRGB(255, 100, 100))
+end
+
+-- ========== SCAN BasicStatsCurrencyAndButtonsUI ==========
+addHeader("STATS/CURRENCY UI")
+local statsUI = PlayerGui:FindFirstChild("BasicStatsCurrencyAndButtonsUI")
+if statsUI then
+    local texts = {}
+    collectTexts(statsUI, texts, "StatsUI", 6)
+    addLine("Found " .. #texts .. " text elements", Color3.fromRGB(255, 255, 0))
+    for i, t in ipairs(texts) do
+        if i > 40 then break end
+        addLine("[" .. (t.visible and "V" or "H") .. "] " .. t.text, Color3.fromRGB(200, 255, 200))
     end
 end
 
--- Step 5: Check for any Folder/ObjectValue under player that might store items
-addHeader("STEP 5: Player children (non-standard)")
-for _, child in ipairs(LocalPlayer:GetChildren()) do
-    if not ({PlayerGui=1, PlayerScripts=1, Backpack=1, StarterGear=1, leaderstats=1, Data=1})[child.Name] then
-        local desc = child.Name .. " [" .. child.ClassName .. "]"
-        if child:IsA("Folder") or child:IsA("Configuration") then
-            desc = desc .. " (" .. #child:GetChildren() .. " children)"
-            addLine(desc, Color3.fromRGB(255, 150, 50))
-            for _, sub in ipairs(child:GetChildren()) do
-                local subInfo = "  " .. sub.Name .. " [" .. sub.ClassName .. "]"
-                if sub:IsA("IntValue") or sub:IsA("StringValue") or sub:IsA("NumberValue") or sub:IsA("BoolValue") then
-                    subInfo = subInfo .. " = " .. tostring(sub.Value)
-                end
-                addLine(subInfo, Color3.fromRGB(200, 200, 150))
-            end
-        else
-            addLine(desc, Color3.fromRGB(200, 200, 200))
-        end
-    end
-end
-
-addHeader("DONE - Screenshot this!")
+addHeader("DONE - Screenshot semua halaman!")
+addLine("Scroll ke bawah untuk lihat semua data", Color3.fromRGB(255, 255, 0))
