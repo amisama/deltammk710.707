@@ -349,7 +349,7 @@ function BaseAdapter.new(gameName)
 end
 
 function BaseAdapter:getStats() return {} end
-function BaseAdapter:getInventory() return {} end
+function BaseAdapter:getInventory(_serverData) return {} end
 function BaseAdapter:getCurrency() return {} end
 function BaseAdapter:getProgress() return {} end
 function BaseAdapter:getServerData() return nil end
@@ -358,8 +358,9 @@ function BaseAdapter:collectAll()
     local data = {stats = {}, inventory = {}, currency = {}, progress = {}, serverData = nil}
 
     local steps = {
+        {"serverData", function() data.serverData = self:getServerData() end},
         {"stats",      function() data.stats = self:getStats() end},
-        {"inventory",  function() data.inventory = self:getInventory() end},
+        {"inventory",  function() data.inventory = self:getInventory(data.serverData) end},
         {"currency",   function() data.currency = self:getCurrency() end},
         {"progress",   function() data.progress = self:getProgress() end},
     }
@@ -464,27 +465,109 @@ function SailorPieceAdapter:getCurrency()
     return currency
 end
 
-function SailorPieceAdapter:getInventory()
+function SailorPieceAdapter:getInventory(serverData)
     local inventory = {}
 
-    -- Backpack tools (CONFIRMED)
+    -- 1. Extract items from GetPlayerData (server inventory = "tas")
+    --    This is the REAL inventory with all items, weapons, fruits, accessories, etc.
+    pcall(function()
+        if serverData and serverData.playerData then
+            local pd = serverData.playerData
+
+            -- Inventory items (weapons, fruits, materials, etc.)
+            if pd.Inventory and type(pd.Inventory) == "table" then
+                for _, item in ipairs(pd.Inventory) do
+                    if type(item) == "table" then
+                        table.insert(inventory, {
+                            name = item.Name or item.name or tostring(item),
+                            type = item.Type or item.type or "item",
+                            equipped = false,
+                            rarity = item.Rarity or item.rarity or nil,
+                        })
+                    elseif type(item) == "string" then
+                        table.insert(inventory, {name = item, type = "item", equipped = false})
+                    end
+                end
+            end
+
+            -- Weapons list
+            if pd.Weapons and type(pd.Weapons) == "table" then
+                for _, wep in ipairs(pd.Weapons) do
+                    if type(wep) == "table" then
+                        table.insert(inventory, {
+                            name = wep.Name or wep.name or tostring(wep),
+                            type = "weapon",
+                            equipped = false,
+                            rarity = wep.Rarity or wep.rarity or nil,
+                        })
+                    elseif type(wep) == "string" then
+                        table.insert(inventory, {name = wep, type = "weapon", equipped = false})
+                    end
+                end
+            end
+
+            -- Accessories list
+            if pd.Accessories and type(pd.Accessories) == "table" then
+                for _, acc in ipairs(pd.Accessories) do
+                    if type(acc) == "table" then
+                        table.insert(inventory, {
+                            name = acc.Name or acc.name or tostring(acc),
+                            type = "accessory",
+                            equipped = acc.Equipped or false,
+                            rarity = acc.Rarity or acc.rarity or nil,
+                        })
+                    elseif type(acc) == "string" then
+                        table.insert(inventory, {name = acc, type = "accessory", equipped = false})
+                    end
+                end
+            end
+
+            -- Fruits
+            if pd.Fruit and type(pd.Fruit) == "string" and pd.Fruit ~= "" then
+                table.insert(inventory, {name = pd.Fruit, type = "fruit", equipped = true})
+            end
+            if pd.Fruits and type(pd.Fruits) == "table" then
+                for _, fruit in ipairs(pd.Fruits) do
+                    if type(fruit) == "string" then
+                        table.insert(inventory, {name = fruit, type = "fruit", equipped = false})
+                    end
+                end
+            end
+
+            -- If server data has a generic Items table
+            if pd.Items and type(pd.Items) == "table" then
+                for itemName, count in pairs(pd.Items) do
+                    if type(count) == "number" and count > 0 then
+                        table.insert(inventory, {
+                            name = tostring(itemName),
+                            type = "material",
+                            equipped = false,
+                            count = count,
+                        })
+                    end
+                end
+            end
+        end
+    end)
+
+    -- 2. Fallback: scan local Backpack & Character (equipped tools/accessories)
+    --    These are always available even if server data fails
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if backpack then
         for _, item in ipairs(backpack:GetChildren()) do
             if item:IsA("Tool") then
-                table.insert(inventory, {name = item.Name, type = "tool", equipped = false})
+                table.insert(inventory, {name = item.Name, type = "equipped_tool", equipped = false})
             end
         end
     end
 
-    -- Equipped tools & accessories (CONFIRMED)
     local character = LocalPlayer.Character
     if character then
         for _, item in ipairs(character:GetChildren()) do
             if item:IsA("Tool") then
-                table.insert(inventory, {name = item.Name, type = "tool", equipped = true})
+                table.insert(inventory, {name = item.Name, type = "equipped_tool", equipped = true})
             elseif item:IsA("Accessory") then
-                table.insert(inventory, {name = item.Name, type = "accessory", equipped = true})
+                table.insert(inventory, {name = item.Name, type = "equipped_accessory", equipped = true})
             end
         end
     end
@@ -493,8 +576,54 @@ function SailorPieceAdapter:getInventory()
 end
 
 function SailorPieceAdapter:getServerData()
-    -- DISABLED: InvokeServer() can yield forever and hang the script.
-    -- All needed data is already available from Player.Data and leaderstats folders.
+    -- Try RemoteFunctions with timeout protection.
+    -- If server responds within 3 seconds, we get bonus data.
+    -- If not, we skip gracefully — core data is already in local folders.
+    local serverData = {}
+
+    local function tryRemoteWithTimeout(path, timeout)
+        timeout = timeout or 3
+        local result = nil
+        local done = false
+
+        local thread = coroutine.create(function()
+            local ok, data = pcall(function()
+                local parts = path:split(".")
+                local current = ReplicatedStorage
+                for _, part in ipairs(parts) do
+                    current = current:FindFirstChild(part)
+                    if not current then return nil end
+                end
+                if current and current:IsA("RemoteFunction") then
+                    return current:InvokeServer()
+                end
+                return nil
+            end)
+            if ok then result = data end
+            done = true
+        end)
+
+        coroutine.resume(thread)
+
+        local start = tick()
+        while not done and (tick() - start) < timeout do
+            task.wait(0.1)
+        end
+
+        return result
+    end
+
+    -- Try GetPlayerData (3s timeout)
+    pcall(function()
+        local playerData = tryRemoteWithTimeout("Remotes.GetPlayerData", 3)
+        if playerData and type(playerData) == "table" then
+            serverData.playerData = playerData
+        end
+    end)
+
+    if next(serverData) then
+        return serverData
+    end
     return nil
 end
 
@@ -512,9 +641,31 @@ function SailorPieceAdapter:getProgress()
         if statPoints then progress.StatPoints = statPoints.Value end
     end
 
-    -- DISABLED: InvokeServer() calls removed to prevent infinite yield.
-    -- GetArtifactData and GetTotalStats can hang the entire script.
-    -- Core progress data (Level/Exp/StatPoints) is already captured above.
+    -- Scan ALL player children for extra data folders (safe, local only)
+    -- This catches any hidden Value folders the game adds (Race, Clan, Fruit, etc.)
+    local scannedFolders = {Data = true, leaderstats = true} -- already scanned above/in getStats
+    for _, child in ipairs(LocalPlayer:GetChildren()) do
+        if child:IsA("Folder") and not scannedFolders[child.Name] then
+            for _, val in ipairs(child:GetChildren()) do
+                if val:IsA("IntValue") or val:IsA("NumberValue") or val:IsA("StringValue") or val:IsA("BoolValue") then
+                    progress[child.Name .. "_" .. val.Name] = val.Value
+                end
+            end
+        end
+    end
+
+    -- Character humanoid stats (health, walkspeed)
+    pcall(function()
+        local character = LocalPlayer.Character
+        if character then
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                progress.MaxHealth = humanoid.MaxHealth
+                progress.WalkSpeed = humanoid.WalkSpeed
+                progress.JumpPower = humanoid.JumpPower
+            end
+        end
+    end)
 
     return progress
 end
