@@ -512,6 +512,10 @@ function SailorPieceAdapter:getInventory(_serverData)
                         equipped = false,
                         count = item.quantity or 1,
                     }
+                    -- Image URL (rbxassetid://...)
+                    if item.image and item.image ~= "" and item.image ~= "rbxassetid://0" then
+                        entry.image = item.image
+                    end
                     -- Sword blessing level
                     if item.blessingLevel and item.blessingLevel > 0 then
                         entry.blessing = item.blessingLevel
