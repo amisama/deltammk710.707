@@ -12,11 +12,11 @@ local RONIX_DIR = "/sdcard/RonixExploit/internal/"
 local APK_LIST = {
     {
         name = "DELTA 2.716 1 ",
-        url  = "https://files.miezutto.sbs/DELTA/DELTA%20SHELEAD%201-2.716.875.apk",
+        url  = "https://files.miezutto.sbs/DELTA/DELTA%20SHELEAD%201-2.716.875.apk.apk",
     },
     {
         name = "DELTA 2.716 2",
-        url  = "https://files.miezutto.sbs/DELTA/DELTA%20SHELEAD%202-2.716.875.apk",
+        url  = "https://files.miezutto.sbs/DELTA/DELTA%20SHELEAD%202-2.716.875.apk.apk",
     },
     {
         name = "DELTA 2.716 3",
