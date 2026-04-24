@@ -11,24 +11,20 @@ local RONIX_DIR = "/sdcard/RonixExploit/internal/"
 -- ============================================================
 local APK_LIST = {
     {
-        name = "XINOR 01 (2.711.876)",
-        url  = "https://github.com/gopayrei1-design/lite-hitam/releases/download/ronix_cuy/XINOR.1-2.711.876.apk.apk",
+        name = "DELTA 2.716 1 ",
+        url  = "https://files.miezutto.sbs/DELTA/DELTA%20SHELEAD%201-2.716.875.apk",
     },
     {
-        name = "XINOR 02 (2.711.876)",
-        url  = "https://github.com/gopayrei1-design/lite-hitam/releases/download/ronix_cuy/XINOR.2-2.711.876.apk.apk",
+        name = "DELTA 2.716 2",
+        url  = "https://files.miezutto.sbs/DELTA/DELTA%20SHELEAD%202-2.716.875.apk",
     },
     {
-        name = "XINOR 03 (2.711.876)",
-        url  = "https://github.com/gopayrei1-design/lite-hitam/releases/download/ronix_cuy/XINOR.3-2.711.876.apk.apk",
+        name = "DELTA 2.716 3",
+        url  = "https://files.miezutto.sbs/DELTA/DELTA%20SHELEAD%203-2.716.875.apk.apk",
     },
     {
-        name = "XINOR 04 (2.711.876)",
-        url  = "https://github.com/gopayrei1-design/lite-hitam/releases/download/ronix_cuy/XINOR.4-2.711.876.apk.apk",
-    },
-    {
-        name = "XINOR 05 (2.711.876)",
-        url  = "https://github.com/gopayrei1-design/lite-hitam/releases/download/ronix_cuy/XINOR.5-2.711.876.apk.apk",
+        name = "DELTA 2.716 4",
+        url  = "https://files.miezutto.sbs/DELTA/DELTA%20SHELEAD%204-2.716.875.apk.apk",
     },
 }
 
