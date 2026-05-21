@@ -3,13 +3,16 @@
 -- ============================================================
 
 local DL_PATH    = "/sdcard/Download/"
-local API_URL    = "https://gofile-clone.mrcy-25d.workers.dev"
 local PKG_PREFIX = "com.roblox"
+
+local GOFILE_FOLDERS = {
+    { name = "Roblox", url = "https://gofile.io/d/8KFxe0" },
+}
 
 local GOFILE_LANG    = "en-US"
 local GOFILE_SALT    = "5d4f7g8sd45fsd"
 local GOFILE_UA      = "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
-local GOFILE_TOKEN   = os.getenv("8KFxe0") or "8KFxe0"
+local GOFILE_TOKEN   = os.getenv("GOFILE_TOKEN") or ""
 local GOFILE_RETRIES = 8
 local GOFILE_WAIT    = 55
 
@@ -144,22 +147,16 @@ end
 
 
 local function load_db()
-    print("  Memuat database dari server...")
-    local raw = run("curl -s " .. API_URL .. "/api/cli/all")
+    print("  Memuat daftar Gofile...")
     local db, keys = {}, {}
-    if raw == "" or raw == "EMPTY" or raw == "ERROR" then
-        return db, keys
-    end
-    for line in raw:gmatch("[^\r\n]+") do
-        local folder, name, url = line:match("([^|]+)|([^|]+)|([^|]+)")
-        if folder and name and url then
-            if not db[folder] then
-                db[folder] = {}
-                table.insert(keys, folder)
-            end
-            table.insert(db[folder], { name = name, url = url })
+
+    for _, item in ipairs(GOFILE_FOLDERS) do
+        if item.name and item.url and item.url ~= "" then
+            db[item.name] = { { name = "Buka folder Gofile", url = item.url, gofile_folder = true } }
+            keys[#keys+1] = item.name
         end
     end
+
     return db, keys
 end
 
@@ -249,24 +246,86 @@ local function gofile_api_headers(account_token)
         "-H " .. sh_quote("Referer: https://gofile.io/")
 end
 
-local function gofile_find_file(data_json, wanted_name)
-    local wanted = tostring(wanted_name):lower()
-    local first_link, first_name
-
+local function gofile_each_file(data_json, callback)
     for object in data_json:gmatch('{[^{}]*"type"%s*:%s*"file"[^{}]*}') do
         local name = extract_json_string(object, "name")
         local link = extract_json_string(object, "link")
         if name and link then
-            if not first_link then
-                first_link, first_name = link, name
-            end
-            if name:lower() == wanted or name:lower():find(wanted, 1, true) then
-                return link, name
-            end
+            callback(name, link)
+        end
+    end
+end
+
+local function gofile_find_file(data_json, wanted_name)
+    local wanted = tostring(wanted_name):lower()
+    local first_link, first_name
+
+    gofile_each_file(data_json, function(name, link)
+        if not first_link then
+            first_link, first_name = link, name
+        end
+        if not first_name or name:lower() == wanted or name:lower():find(wanted, 1, true) then
+            first_link, first_name = link, name
+        end
+    end)
+
+    return first_link, first_name
+end
+
+local function gofile_get_data(url)
+    local content_id = gofile_content_id(url)
+    if not content_id then
+        return nil, nil, nil, "URL bukan folder Gofile"
+    end
+
+    local token, token_err = gofile_account_token()
+    if not token then
+        return nil, nil, nil, "Gagal membuat/membaca Gofile token: " .. tostring(token_err)
+    end
+
+    local api_url = "https://api.gofile.io/contents/" .. url_encode(content_id) ..
+        "?cache=false&contentFilter=&page=1&pageSize=1000&sortField=name&sortDirection=1"
+
+    for attempt = 1, GOFILE_RETRIES do
+        local raw = run("curl -sS " .. gofile_api_headers(token) .. " " .. sh_quote(api_url))
+        local status = extract_json_string(raw, "status")
+
+        if status == "ok" then
+            return extract_json_object(raw, "data") or raw, token, content_id
+        end
+
+        if status == "error-passwordRequired" then
+            return nil, nil, nil, "Folder Gofile butuh password"
+        end
+
+        if attempt < GOFILE_RETRIES then
+            print(string.format("     [!] Gofile limit/status %s, tunggu %ds (%d/%d)", tostring(status), GOFILE_WAIT, attempt, GOFILE_RETRIES))
+            os.execute("sleep " .. tonumber(GOFILE_WAIT))
+        else
+            return nil, nil, nil, "Gofile gagal: " .. tostring(status or raw)
         end
     end
 
-    return first_link, first_name
+    return nil, nil, nil, "Gofile retry habis"
+end
+
+local function gofile_list_files(url)
+    local data, token, _, err = gofile_get_data(url)
+    if not data then
+        return nil, err
+    end
+
+    local list = {}
+    gofile_each_file(data, function(name, link)
+        if name:lower():match("%.apk$") then
+            list[#list+1] = { name = name, url = link, gofile_token = token }
+        end
+    end)
+
+    if #list == 0 then
+        return nil, "Tidak ada APK di folder Gofile"
+    end
+    return list
 end
 
 local function gofile_resolve(url, wanted_name)
@@ -275,40 +334,16 @@ local function gofile_resolve(url, wanted_name)
         return url
     end
 
-    local token, token_err = gofile_account_token()
-    if not token then
-        return nil, "Gagal membuat/membaca Gofile token: " .. tostring(token_err)
+    local data, token, _, err = gofile_get_data(url)
+    if not data then
+        return nil, err
     end
 
-    local api_url = "https://api.gofile.io/contents/" .. url_encode(content_id) ..
-        "?cache=true&contentFilter=&page=1&pageSize=1000&sortField=name&sortDirection=1"
-
-    for attempt = 1, GOFILE_RETRIES do
-        local raw = run("curl -sS " .. gofile_api_headers(token) .. " " .. sh_quote(api_url))
-        local status = extract_json_string(raw, "status")
-
-        if status == "ok" then
-            local data = extract_json_object(raw, "data") or raw
-            local link, name = gofile_find_file(data, wanted_name)
-            if link then
-                return link, nil, token, name
-            end
-            return nil, "Tidak ada file APK di folder Gofile"
-        end
-
-        if status == "error-passwordRequired" then
-            return nil, "Folder Gofile butuh password"
-        end
-
-        if attempt < GOFILE_RETRIES then
-            print(string.format("     [!] Gofile limit/status %s, tunggu %ds (%d/%d)", tostring(status), GOFILE_WAIT, attempt, GOFILE_RETRIES))
-            os.execute("sleep " .. tonumber(GOFILE_WAIT))
-        else
-            return nil, "Gofile gagal: " .. tostring(status or raw)
-        end
+    local link, name = gofile_find_file(data, wanted_name)
+    if link then
+        return link, nil, token, name
     end
-
-    return nil, "Gofile retry habis"
+    return nil, "Tidak ada file APK di folder Gofile"
 end
 
 
@@ -318,9 +353,20 @@ local function do_install(folder_name, list)
     print("")
 
     if not list or #list == 0 then
-        print("  [!] Folder kosong atau server tidak merespons.")
+        print("  [!] Folder kosong atau daftar tidak terbaca.")
         pause()
         return
+    end
+
+    if list[1] and list[1].gofile_folder then
+        print("  Membaca isi folder Gofile...")
+        local files, err = gofile_list_files(list[1].url)
+        if not files then
+            print("  [!] " .. tostring(err))
+            pause()
+            return
+        end
+        list = files
     end
 
     local item_names = {}
@@ -350,7 +396,10 @@ local function do_install(folder_name, list)
         local dest = DL_PATH .. "tmp_nm_" .. idx .. ".apk"
         print("     Downloading: " .. app.name)
 
-        local download_url, err, gofile_token = gofile_resolve(app.url, app.name)
+        local download_url, err, gofile_token = app.url, nil, app.gofile_token
+        if gofile_content_id(app.url) then
+            download_url, err, gofile_token = gofile_resolve(app.url, app.name)
+        end
         if not download_url then
             print("     [!] " .. err)
         else
@@ -492,8 +541,10 @@ while true do
     local db, folder_keys = load_db()
 
     if #folder_keys == 0 then
-        print("  [!] Tidak ada APK di server atau koneksi gagal.")
-        pause()
+            print("  [!] Belum ada daftar Gofile.")
+            print("  Isi table GOFILE_FOLDERS di bagian atas script.")
+            print("  Contoh: { name = \"Roblox\", url = \"https://gofile.io/d/8KFxe0\" },")
+            pause()
     else
         local menu_labels = {}
         for _, k in ipairs(folder_keys) do
