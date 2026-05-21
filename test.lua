@@ -1,275 +1,527 @@
-local Players = game:GetService("Players")
-local UIS = game:GetService("UserInputService")
-local lp = Players.LocalPlayer
--- Cleanup old GUI
-local oldGui = lp.PlayerGui:FindFirstChild("AvatarClonerGUI")
-if oldGui then oldGui:Destroy() end
--- Save original appearance
-local originalDesc
-do
-    local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
-    if hum then
-        pcall(function() originalDesc = hum:GetAppliedDescription() end)
-    end
+-- ============================================================
+--  No Mercy Tools  |  Termux CLI  |  Simple & Robust
+-- ============================================================
+
+local DL_PATH    = "/sdcard/Download/"
+local API_URL    = "https://gofile-clone.mrcy-25d.workers.dev"
+local PKG_PREFIX = "com.roblox"
+
+local GOFILE_LANG    = "en-US"
+local GOFILE_SALT    = "5d4f7g8sd45fsd"
+local GOFILE_UA      = "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+local GOFILE_TOKEN   = os.getenv("8KFxe0") or "8KFxe0"
+local GOFILE_RETRIES = 8
+local GOFILE_WAIT    = 55
+
+
+
+local function run(cmd)
+    local h = io.popen(cmd .. " 2>/dev/null")
+    if not h then return "" end
+    local out = h:read("*a") or ""
+    h:close()
+    return out:match("^%s*(.-)%s*$")   
 end
-----------------------------------------------------------------
--- GUI
-----------------------------------------------------------------
-local gui = Instance.new("ScreenGui")
-gui.Name = "AvatarClonerGUI"
-gui.ResetOnSpawn = false
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.Parent = lp:WaitForChild("PlayerGui")
-local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 320, 0, 380)
-main.Position = UDim2.new(0.5, -160, 0.5, -190)
-main.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-main.BorderSizePixel = 0
-main.Active = true
-main.Draggable = true
-main.Parent = gui
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 8)
-corner.Parent = main
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(80, 120, 255)
-stroke.Thickness = 1.5
-stroke.Parent = main
--- Title bar
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 36)
-title.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-title.BorderSizePixel = 0
-title.Text = "  Avatar Cloner"
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.Font = Enum.Font.GothamBold
-title.TextSize = 14
-title.Parent = main
-local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 8)
-titleCorner.Parent = title
--- Close button
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 30, 0, 30)
-closeBtn.Position = UDim2.new(1, -33, 0, 3)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-closeBtn.Text = "X"
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 14
-closeBtn.BorderSizePixel = 0
-closeBtn.Parent = main
-local cbc = Instance.new("UICorner") cbc.CornerRadius = UDim.new(0, 6) cbc.Parent = closeBtn
-closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
--- Username input
-local input = Instance.new("TextBox")
-input.Size = UDim2.new(1, -20, 0, 35)
-input.Position = UDim2.new(0, 10, 0, 50)
-input.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-input.PlaceholderText = "Paste username here..."
-input.PlaceholderColor3 = Color3.fromRGB(140, 140, 150)
-input.Text = ""
-input.TextColor3 = Color3.fromRGB(255, 255, 255)
-input.Font = Enum.Font.Gotham
-input.TextSize = 13
-input.BorderSizePixel = 0
-input.ClearTextOnFocus = false
-input.Parent = main
-local ic = Instance.new("UICorner") ic.CornerRadius = UDim.new(0, 6) ic.Parent = input
--- Status label
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, -20, 0, 20)
-status.Position = UDim2.new(0, 10, 0, 90)
-status.BackgroundTransparency = 1
-status.Text = "Ready"
-status.TextColor3 = Color3.fromRGB(180, 180, 200)
-status.Font = Enum.Font.Gotham
-status.TextSize = 12
-status.TextXAlignment = Enum.TextXAlignment.Left
-status.Parent = main
-local function setStatus(msg, color)
-    status.Text = msg
-    status.TextColor3 = color or Color3.fromRGB(180, 180, 200)
+
+
+local function run_root(cmd)
+    local h = io.popen("su -c '" .. cmd .. "' 2>&1")
+    if not h then return "" end
+    local out = h:read("*a") or ""
+    h:close()
+    return out:match("^%s*(.-)%s*$")
 end
--- Player list scroll
-local listLabel = Instance.new("TextLabel")
-listLabel.Size = UDim2.new(1, -20, 0, 18)
-listLabel.Position = UDim2.new(0, 10, 0, 115)
-listLabel.BackgroundTransparency = 1
-listLabel.Text = "Players in server (tap to select):"
-listLabel.TextColor3 = Color3.fromRGB(150, 150, 170)
-listLabel.Font = Enum.Font.Gotham
-listLabel.TextSize = 11
-listLabel.TextXAlignment = Enum.TextXAlignment.Left
-listLabel.Parent = main
-local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1, -20, 0, 150)
-scroll.Position = UDim2.new(0, 10, 0, 138)
-scroll.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-scroll.BorderSizePixel = 0
-scroll.ScrollBarThickness = 4
-scroll.ScrollBarImageColor3 = Color3.fromRGB(80, 120, 255)
-scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-scroll.Parent = main
-local sc = Instance.new("UICorner") sc.CornerRadius = UDim.new(0, 6) sc.Parent = scroll
-local layout = Instance.new("UIListLayout")
-layout.SortOrder = Enum.SortOrder.LayoutOrder
-layout.Padding = UDim.new(0, 2)
-layout.Parent = scroll
-local padding = Instance.new("UIPadding")
-padding.PaddingTop = UDim.new(0, 4)
-padding.PaddingLeft = UDim.new(0, 4)
-padding.PaddingRight = UDim.new(0, 4)
-padding.Parent = scroll
--- Buttons
-local cloneBtn = Instance.new("TextButton")
-cloneBtn.Size = UDim2.new(0.5, -15, 0, 38)
-cloneBtn.Position = UDim2.new(0, 10, 1, -48)
-cloneBtn.BackgroundColor3 = Color3.fromRGB(80, 120, 255)
-cloneBtn.Text = "CLONE"
-cloneBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-cloneBtn.Font = Enum.Font.GothamBold
-cloneBtn.TextSize = 13
-cloneBtn.BorderSizePixel = 0
-cloneBtn.Parent = main
-local cbnc = Instance.new("UICorner") cbnc.CornerRadius = UDim.new(0, 6) cbnc.Parent = cloneBtn
-local resetBtn = Instance.new("TextButton")
-resetBtn.Size = UDim2.new(0.5, -15, 0, 38)
-resetBtn.Position = UDim2.new(0.5, 5, 1, -48)
-resetBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-resetBtn.Text = "RESET"
-resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-resetBtn.Font = Enum.Font.GothamBold
-resetBtn.TextSize = 13
-resetBtn.BorderSizePixel = 0
-resetBtn.Parent = main
-local rbc = Instance.new("UICorner") rbc.CornerRadius = UDim.new(0, 6) rbc.Parent = resetBtn
-----------------------------------------------------------------
--- Clone Logic
-----------------------------------------------------------------
-local function findTarget(name)
-    if not name or name == "" then return nil end
-    name = string.lower(name)
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= lp and (string.lower(p.Name) == name or string.lower(p.DisplayName) == name) then
-            return p
+
+local function sh_quote(value)
+    return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
+end
+
+local function url_encode(value)
+    return tostring(value):gsub("([^%w%-_%.~])", function(c)
+        return string.format("%%%02X", c:byte())
+    end)
+end
+
+local function sha256(value)
+    return run("printf %s " .. sh_quote(value) .. " | openssl dgst -sha256 -r | awk '{print $1}'")
+end
+
+local function extract_json_string(json, key)
+    return json:match('"' .. key .. '"%s*:%s*"([^"]*)"')
+end
+
+local function extract_json_object(json, key)
+    local key_pos = json:find('"' .. key .. '"%s*:', 1)
+    if not key_pos then return nil end
+
+    local start_pos = json:find("{", key_pos)
+    if not start_pos then return nil end
+
+    local depth = 0
+    local in_string = false
+    local escape = false
+
+    for i = start_pos, #json do
+        local c = json:sub(i, i)
+        if in_string then
+            if escape then
+                escape = false
+            elseif c == "\\" then
+                escape = true
+            elseif c == '"' then
+                in_string = false
+            end
+        elseif c == '"' then
+            in_string = true
+        elseif c == "{" then
+            depth = depth + 1
+        elseif c == "}" then
+            depth = depth - 1
+            if depth == 0 then
+                return json:sub(start_pos, i)
+            end
         end
     end
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= lp and (string.find(string.lower(p.Name), name) or string.find(string.lower(p.DisplayName), name)) then
-            return p
-        end
-    end
+
     return nil
 end
-local function applyAvatar(targetChar, myChar)
-    local myHum = myChar:FindFirstChildOfClass("Humanoid")
-    local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
-    if not myHum or not targetHum then return false, "Humanoid missing" end
-    local ok, desc = pcall(function() return targetHum:GetAppliedDescription() end)
-    if ok and desc then
-        pcall(function() myHum:ApplyDescription(desc) end)
+
+
+local function tty_read()
+    local tty = io.open("/dev/tty", "r")
+    if tty then
+        local line = tty:read("*l") or ""
+        tty:close()
+        return line
     end
-    for _, a in ipairs(myChar:GetChildren()) do
-        if a:IsA("Accessory") then a:Destroy() end
-    end
-    for _, a in ipairs(targetChar:GetChildren()) do
-        if a:IsA("Accessory") then
-            pcall(function() myHum:AddAccessory(a:Clone()) end)
-        end
-    end
-    local oldBC = myChar:FindFirstChild("Body Colors")
-    if oldBC then oldBC:Destroy() end
-    local tBC = targetChar:FindFirstChild("Body Colors")
-    if tBC then tBC:Clone().Parent = myChar end
-    for _, item in ipairs(myChar:GetChildren()) do
-        if item:IsA("Shirt") or item:IsA("Pants") or item:IsA("ShirtGraphic") or item:IsA("CharacterMesh") then
-            item:Destroy()
-        end
-    end
-    for _, item in ipairs(targetChar:GetChildren()) do
-        if item:IsA("Shirt") or item:IsA("Pants") or item:IsA("ShirtGraphic") or item:IsA("CharacterMesh") then
-            item:Clone().Parent = myChar
-        end
-    end
-    local tHead, mHead = targetChar:FindFirstChild("Head"), myChar:FindFirstChild("Head")
-    if tHead and mHead then
-        local oldFace = mHead:FindFirstChild("face")
-        if oldFace then oldFace:Destroy() end
-        local tFace = tHead:FindFirstChild("face")
-        if tFace then tFace:Clone().Parent = mHead end
-    end
-    pcall(function() myHum.DisplayName = targetHum.DisplayName end)
-    return true
+    return io.read("*l") or ""
 end
-local function doClone(name)
-    local target = findTarget(name)
-    if not target then
-        setStatus("Target not found: " .. name, Color3.fromRGB(255, 100, 100))
+
+local function pause(msg)
+    io.write(msg or "\n  Tekan Enter untuk lanjut... ")
+    io.flush()
+    tty_read()
+end
+
+
+local SEP = string.rep("-", 66)
+
+local function clear()
+    os.execute("clear 2>/dev/null || printf '\\033c'")
+end
+
+local function header()
+    clear()
+    print("")
+    print([[
+  ███▄    █  ██████   ███▄   ▄███ ███████ ██████   ██████ ██    ██
+  ████▄   █ ██    ██  █████ █████ ██      ██   ██ ██      ██    ██
+  ██ ██▄  █ ██    ██  ██ █████ ██ ███████ ██████  ██       ██  ██ 
+  ██  ██▄ █ ██    ██  ██  ███  ██ ██      ██  ██  ██         ██   
+  ██   ████  ██████   ██   █   ██ ███████ ██   ██  ██████    ██   
+                                                                  
+                       T O O L S   B O X                          ]])
+    print("  " .. SEP)
+    print("  " .. SEP)
+    print("")
+end
+
+
+local function list_menu(title, items, extra_rows)
+    print("  [ " .. title .. " ]")
+    print("  " .. string.rep("-", 40))
+    for i, item in ipairs(items) do
+        print(string.format("  %-4s %s", "[" .. i .. "]", item))
+    end
+    if extra_rows then
+        for _, row in ipairs(extra_rows) do
+            print(string.format("  %-4s %s", "[" .. row[1] .. "]", row[2]))
+        end
+    end
+    print("  " .. string.rep("-", 40))
+end
+
+
+
+local function load_db()
+    print("  Memuat database dari server...")
+    local raw = run("curl -s " .. API_URL .. "/api/cli/all")
+    local db, keys = {}, {}
+    if raw == "" or raw == "EMPTY" or raw == "ERROR" then
+        return db, keys
+    end
+    for line in raw:gmatch("[^\r\n]+") do
+        local folder, name, url = line:match("([^|]+)|([^|]+)|([^|]+)")
+        if folder and name and url then
+            if not db[folder] then
+                db[folder] = {}
+                table.insert(keys, folder)
+            end
+            table.insert(db[folder], { name = name, url = url })
+        end
+    end
+    return db, keys
+end
+
+
+local function parse_input(input, max)
+    local targets = {}
+    if input == "all" then
+        for i = 1, max do targets[#targets+1] = i end
+        return targets
+    end
+    for part in input:gmatch("[^,%s]+") do
+        local s, e = part:match("^(%d+)-(%d+)$")
+        if s then
+            for i = tonumber(s), tonumber(e) do
+                if i >= 1 and i <= max then targets[#targets+1] = i end
+            end
+        else
+            local n = tonumber(part)
+            if n and n >= 1 and n <= max then targets[#targets+1] = n end
+        end
+    end
+    return targets
+end
+
+local function gofile_content_id(url)
+    return tostring(url):match("gofile%.io/d/([^/?#]+)")
+        or tostring(url):match("gofile%.io/%?c=([^&?#]+)")
+        or tostring(url):match("^gofile:([^%s]+)$")
+end
+
+local function gofile_create_account()
+    local raw = run("curl -sS -X POST " ..
+        "-H " .. sh_quote("User-Agent: " .. GOFILE_UA) .. " " ..
+        "-H " .. sh_quote("X-BL: " .. GOFILE_LANG) .. " " ..
+        "-H " .. sh_quote("Origin: https://gofile.io") .. " " ..
+        "-H " .. sh_quote("Referer: https://gofile.io/") .. " " ..
+        "https://api.gofile.io/accounts")
+
+    local status = extract_json_string(raw, "status")
+    local token = extract_json_string(raw, "token")
+    if status == "ok" and token and token ~= "" then
+        return token
+    end
+    return nil, status or "account-create-failed"
+end
+
+local function gofile_account_token()
+    if GOFILE_TOKEN ~= "" then
+        return GOFILE_TOKEN
+    end
+
+    local cache_path = DL_PATH .. ".gofile_token"
+    local f = io.open(cache_path, "r")
+    if f then
+        local token = (f:read("*a") or ""):match("^%s*(.-)%s*$")
+        f:close()
+        if token ~= "" then return token end
+    end
+
+    local token, err = gofile_create_account()
+    if not token then
+        return nil, err
+    end
+
+    os.execute("mkdir -p " .. sh_quote(DL_PATH))
+    f = io.open(cache_path, "w")
+    if f then
+        f:write(token)
+        f:close()
+    end
+
+    return token
+end
+
+local function gofile_website_token(account_token)
+    local raw = GOFILE_UA .. "::" .. GOFILE_LANG .. "::" .. account_token ..
+        "::" .. tostring(math.floor(os.time() / 14400)) .. "::" .. GOFILE_SALT
+    return sha256(raw)
+end
+
+local function gofile_api_headers(account_token)
+    return "-H " .. sh_quote("User-Agent: " .. GOFILE_UA) .. " " ..
+        "-H " .. sh_quote("Authorization: Bearer " .. account_token) .. " " ..
+        "-H " .. sh_quote("X-Website-Token: " .. gofile_website_token(account_token)) .. " " ..
+        "-H " .. sh_quote("X-BL: " .. GOFILE_LANG) .. " " ..
+        "-H " .. sh_quote("Origin: https://gofile.io") .. " " ..
+        "-H " .. sh_quote("Referer: https://gofile.io/")
+end
+
+local function gofile_find_file(data_json, wanted_name)
+    local wanted = tostring(wanted_name):lower()
+    local first_link, first_name
+
+    for object in data_json:gmatch('{[^{}]*"type"%s*:%s*"file"[^{}]*}') do
+        local name = extract_json_string(object, "name")
+        local link = extract_json_string(object, "link")
+        if name and link then
+            if not first_link then
+                first_link, first_name = link, name
+            end
+            if name:lower() == wanted or name:lower():find(wanted, 1, true) then
+                return link, name
+            end
+        end
+    end
+
+    return first_link, first_name
+end
+
+local function gofile_resolve(url, wanted_name)
+    local content_id = gofile_content_id(url)
+    if not content_id then
+        return url
+    end
+
+    local token, token_err = gofile_account_token()
+    if not token then
+        return nil, "Gagal membuat/membaca Gofile token: " .. tostring(token_err)
+    end
+
+    local api_url = "https://api.gofile.io/contents/" .. url_encode(content_id) ..
+        "?cache=true&contentFilter=&page=1&pageSize=1000&sortField=name&sortDirection=1"
+
+    for attempt = 1, GOFILE_RETRIES do
+        local raw = run("curl -sS " .. gofile_api_headers(token) .. " " .. sh_quote(api_url))
+        local status = extract_json_string(raw, "status")
+
+        if status == "ok" then
+            local data = extract_json_object(raw, "data") or raw
+            local link, name = gofile_find_file(data, wanted_name)
+            if link then
+                return link, nil, token, name
+            end
+            return nil, "Tidak ada file APK di folder Gofile"
+        end
+
+        if status == "error-passwordRequired" then
+            return nil, "Folder Gofile butuh password"
+        end
+
+        if attempt < GOFILE_RETRIES then
+            print(string.format("     [!] Gofile limit/status %s, tunggu %ds (%d/%d)", tostring(status), GOFILE_WAIT, attempt, GOFILE_RETRIES))
+            os.execute("sleep " .. tonumber(GOFILE_WAIT))
+        else
+            return nil, "Gofile gagal: " .. tostring(status or raw)
+        end
+    end
+
+    return nil, "Gofile retry habis"
+end
+
+
+local function do_install(folder_name, list)
+    header()
+    print("  [ Install APK : " .. folder_name .. " ]")
+    print("")
+
+    if not list or #list == 0 then
+        print("  [!] Folder kosong atau server tidak merespons.")
+        pause()
         return
     end
-    local myChar = lp.Character or lp.CharacterAdded:Wait()
-    local targetChar = target.Character
-    if not targetChar then
-        setStatus("Target has no character", Color3.fromRGB(255, 100, 100))
+
+    local item_names = {}
+    for _, app in ipairs(list) do
+        item_names[#item_names+1] = app.name
+    end
+    list_menu("Pilih APK", item_names, { {"0", "Kembali"} })
+
+    io.write("  Pilih (contoh: 1  |  1,3  |  1-5  |  all  |  0): ")
+    io.flush()
+    local input = tty_read()
+    if input == "0" or input == "" then return end
+
+    local targets = parse_input(input, #list)
+    if #targets == 0 then
+        print("  [!] Input tidak valid.")
+        pause()
         return
     end
-    setStatus("Cloning " .. target.Name .. "...", Color3.fromRGB(255, 220, 100))
-    local ok, err = applyAvatar(targetChar, myChar)
-    if ok then
-        setStatus("Cloned: " .. target.DisplayName .. " (@" .. target.Name .. ")", Color3.fromRGB(100, 255, 150))
-    else
-        setStatus("Failed: " .. tostring(err), Color3.fromRGB(255, 100, 100))
+
+
+    print("")
+    print("  >> Mendownload " .. #targets .. " file ke " .. DL_PATH)
+    local downloaded = {}
+    for _, idx in ipairs(targets) do
+        local app  = list[idx]
+        local dest = DL_PATH .. "tmp_nm_" .. idx .. ".apk"
+        print("     Downloading: " .. app.name)
+
+        local download_url, err, gofile_token = gofile_resolve(app.url, app.name)
+        if not download_url then
+            print("     [!] " .. err)
+        else
+            local extra_headers = "-H " .. sh_quote("Accept: application/octet-stream") .. " " ..
+                "-H " .. sh_quote("User-Agent: " .. GOFILE_UA)
+            if gofile_token then
+                extra_headers = extra_headers .. " -H " .. sh_quote("Cookie: accountToken=" .. gofile_token)
+            end
+
+            local sh_cmd = string.format(
+                "curl -L --fail -s %s -o %s %s & " ..
+                "CPID=$!; T=0; FIRST=1; " ..
+                "while kill -0 $CPID 2>/dev/null; do " ..
+                "  sleep 1; T=$((T+1)); " ..
+                "  SZ=$(du -h %s 2>/dev/null | cut -f1); " ..
+                "  if [ \"$FIRST\" = 1 ]; then " ..
+                "    printf '     [%%ds] %%s\n' $T \"$SZ\" > /dev/tty; FIRST=0; " ..
+                "  else " ..
+                "    printf '\033[1A\033[2K     [%%ds] %%s\n' $T \"$SZ\" > /dev/tty; " ..
+                "  fi; " ..
+                "done; " ..
+                "wait $CPID; echo __DONE__",
+                extra_headers, sh_quote(dest), sh_quote(download_url), sh_quote(dest)
+            )
+
+            local ok = false
+            local h  = io.popen(sh_cmd)
+            if h then
+                for line in h:lines() do
+                    if line == "__DONE__" then ok = true; break end
+                    io.write("     ")
+                    print(line)
+                end
+                local _, _, code = h:close()
+                ok = ok and code == 0
+            end
+
+            if ok then
+                local sz = run("du -h " .. sh_quote(dest) .. " 2>/dev/null | cut -f1")
+                downloaded[#downloaded+1] = { path = dest, name = app.name }
+                print("     [OK] Selesai! " .. sz)
+            else
+                print("     [!] GAGAL download: " .. app.name)
+            end
+        end
     end
+
+
+    print("")
+    print("  >> Menginstall ...")
+    for _, f in ipairs(downloaded) do
+        print("     Installing: " .. f.name)
+        local out = run_root("pm install -r " .. f.path)
+        if out:find("Success") then
+            print("     [OK] Sukses!")
+        else
+           
+            print("     [!] " .. out:gsub("[\r\n]+", " "))
+        end
+        os.execute("rm -f '" .. f.path .. "'")
+    end
+
+    print("")
+    print("  >> Instalasi selesai.")
+
+    pause()
 end
-local function doReset()
-    local myChar = lp.Character
-    if not myChar then return end
-    local hum = myChar:FindFirstChildOfClass("Humanoid")
-    if hum and originalDesc then
-        pcall(function() hum:ApplyDescription(originalDesc) end)
-        setStatus("Avatar reset", Color3.fromRGB(100, 255, 150))
-    else
-        lp:LoadCharacter()
-        setStatus("Respawned", Color3.fromRGB(100, 255, 150))
+
+
+local function do_uninstall()
+    header()
+    print("  [ Auto Uninstall : " .. PKG_PREFIX .. "* ]")
+    print("")
+    print("  Scanning packages...")
+
+    local raw = run("pm list packages " .. PKG_PREFIX)
+    local pkgs = {}
+    for p in raw:gmatch("package:(%S+)") do
+        pkgs[#pkgs+1] = p
     end
+
+    if #pkgs == 0 then
+        print("  [!] Tidak ada package yang cocok ditemukan.")
+        pause()
+        return
+    end
+
+    list_menu("Package Terinstal", pkgs, { {"0", "Kembali"} })
+    io.write("  Pilih (1  |  1,3  |  all  |  0): ")
+    io.flush()
+    local input = tty_read()
+    if input == "0" or input == "" then return end
+
+    local targets = parse_input(input, #pkgs)
+    if #targets == 0 then
+        print("  [!] Input tidak valid.")
+        pause()
+        return
+    end
+
+
+    io.write("  Hapus " .. #targets .. " package? (y/n): ")
+    io.flush()
+    local confirm = tty_read()
+    if confirm:lower() ~= "y" then
+        print("  Dibatalkan.")
+        pause()
+        return
+    end
+
+    print("")
+    for _, idx in ipairs(targets) do
+        local pkg = pkgs[idx]
+        if pkg then
+            print("  Uninstalling: " .. pkg)
+            local out = run_root("pm uninstall " .. pkg)
+            if out:find("Success") then
+                print("  [OK] Sukses!")
+            else
+                print("  [!] " .. out:gsub("[\r\n]+", " "))
+            end
+        end
+    end
+
+    print("")
+    print("  >> Uninstall selesai.")
+    pause()
 end
-cloneBtn.MouseButton1Click:Connect(function() doClone(input.Text) end)
-resetBtn.MouseButton1Click:Connect(doReset)
-input.FocusLost:Connect(function(enter)
-    if enter then doClone(input.Text) end
-end)
-----------------------------------------------------------------
--- Player List
-----------------------------------------------------------------
-local function refreshList()
-    for _, c in ipairs(scroll:GetChildren()) do
-        if c:IsA("TextButton") then c:Destroy() end
-    end
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= lp then
-            local btn = Instance.new("TextButton")
-            btn.Size = UDim2.new(1, -8, 0, 28)
-            btn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-            btn.Text = "  " .. p.DisplayName .. "  (@" .. p.Name .. ")"
-            btn.TextColor3 = Color3.fromRGB(230, 230, 240)
-            btn.Font = Enum.Font.Gotham
-            btn.TextSize = 12
-            btn.TextXAlignment = Enum.TextXAlignment.Left
-            btn.BorderSizePixel = 0
-            btn.Parent = scroll
-            local bc = Instance.new("UICorner") bc.CornerRadius = UDim.new(0, 4) bc.Parent = btn
-            btn.MouseButton1Click:Connect(function()
-                input.Text = p.Name
-                setStatus("Selected: " .. p.Name, Color3.fromRGB(180, 200, 255))
-            end)
+
+
+
+
+-- ============================================================
+-- MAIN LOOP
+-- ============================================================
+
+while true do
+    header()
+    local db, folder_keys = load_db()
+
+    if #folder_keys == 0 then
+        print("  [!] Tidak ada APK di server atau koneksi gagal.")
+        pause()
+    else
+        local menu_labels = {}
+        for _, k in ipairs(folder_keys) do
+            menu_labels[#menu_labels+1] = k .. "  (" .. #db[k] .. " file)"
+        end
+
+        local idx_uninstall  = #folder_keys + 1
+
+        list_menu("T O O L S   B O X", menu_labels, {
+            { tostring(idx_uninstall), "Auto Uninstall  (hapus " .. PKG_PREFIX .. "*)" },
+            { "0",                     "Exit" },
+        })
+
+        io.write("  Pilih: ")
+        io.flush()
+        local choice = tty_read()
+        local num    = tonumber(choice)
+
+        if choice == "0" then
+            print("\n  Bye!\n")
+            break
+        elseif num == idx_uninstall then
+            do_uninstall()
+        elseif num and num >= 1 and num <= #folder_keys then
+            do_install(folder_keys[num], db[folder_keys[num]])
+        else
+            print("  [!] Pilihan tidak valid.")
+            os.execute("sleep 1")
         end
     end
 end
-refreshList()
-Players.PlayerAdded:Connect(refreshList)
-Players.PlayerRemoving:Connect(refreshList)
-setStatus("Ready - paste username or tap a player below", Color3.fromRGB(180, 200, 255))
-print("[Avatar Cloner] GUI loaded")
