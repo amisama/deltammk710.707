@@ -128,6 +128,8 @@ local function header()
     clear()
     print("")
     print("  N O M E R C Y   T O O L S   B O X")
+    print("  join discord executor lite free : https://discord.gg/G3ZFezQC6r")
+    print("  thank to god for everything :)")
     print("  " .. SEP)
     print("")
 end
