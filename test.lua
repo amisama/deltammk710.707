@@ -128,14 +128,15 @@ local function header()
     clear()
     print("")
     print([[
-  ███▄    █  ██████   ███▄   ▄███ ███████ ██████   ██████ ██    ██
-  ████▄   █ ██    ██  █████ █████ ██      ██   ██ ██      ██    ██
-  ██ ██▄  █ ██    ██  ██ █████ ██ ███████ ██████  ██       ██  ██ 
-  ██  ██▄ █ ██    ██  ██  ███  ██ ██      ██  ██  ██         ██   
-  ██   ████  ██████   ██   █   ██ ███████ ██   ██  ██████    ██   
-                                                                  
-                       T O O L S   B O X                          ]])
-    print("  " .. SEP)
+  ##    ##  #######  ##     ## ######## ########   ######  ##    ##
+  ###   ## ##     ## ###   ### ##       ##     ## ##    ##  ##  ## 
+  ####  ## ##     ## #### #### ##       ##     ## ##         ####  
+  ## ## ## ##     ## ## ### ## ######   ########  ##          ##   
+  ##  #### ##     ## ##     ## ##       ##   ##   ##          ##   
+  ##   ### ##     ## ##     ## ##       ##    ##  ##    ##    ##   
+  ##    ##  #######  ##     ## ######## ##     ##  ######     ##   
+
+                         T O O L S   B O X                         ]])
     print("  " .. SEP)
     print("")
 end
@@ -543,47 +544,89 @@ end
 
 
 
+local function do_nomercy()
+    while true do
+        header()
+        local db, folder_keys = load_db()
+
+        if #folder_keys == 0 then
+            print("  [!] Belum ada daftar Gofile.")
+            print("  Isi table GOFILE_FOLDERS di bagian atas script.")
+            print("  Contoh: { name = \"ami ayam\", url = \"https://gofile.io/d/8KFxe0\" },")
+            pause()
+            return
+        end
+
+        local menu_labels = {}
+        for _, k in ipairs(folder_keys) do
+            menu_labels[#menu_labels+1] = k
+        end
+
+        list_menu("Gofile NoMercy", menu_labels, { { "0", "Kembali" } })
+        io.write("  Pilih: ")
+        io.flush()
+        local choice = tty_read()
+        if choice == "0" or choice == "" then return end
+
+        local num = tonumber(choice)
+        if num and num >= 1 and num <= #folder_keys then
+            do_install(folder_keys[num], db[folder_keys[num]])
+        else
+            print("  [!] Pilihan tidak valid.")
+            os.execute("sleep 1")
+        end
+    end
+end
+
+local function do_custom()
+    header()
+    print("  [ Custom Gofile Link ]")
+    print("")
+    print("  Paste link Gofile, contoh: https://gofile.io/d/UBXRNf")
+    io.write("  Link: ")
+    io.flush()
+    local link = tty_read()
+    if not link or link == "" then return end
+
+    link = link:match("^%s*(.-)%s*$")
+    if not gofile_content_id(link) then
+        print("  [!] Bukan link folder Gofile yang valid.")
+        pause()
+        return
+    end
+
+    do_install("Custom", { { name = "Buka folder Gofile", url = link, gofile_folder = true } })
+end
+
+
 -- ============================================================
 -- MAIN LOOP
 -- ============================================================
 
 while true do
     header()
-    local db, folder_keys = load_db()
 
-    if #folder_keys == 0 then
-            print("  [!] Belum ada daftar Gofile.")
-            print("  Isi table GOFILE_FOLDERS di bagian atas script.")
-            print("  Contoh: { name = \"Roblox\", url = \"https://gofile.io/d/8KFxe0\" },")
-            pause()
+    list_menu("T O O L S   B O X", {
+        "Gofile NoMercy",
+        "Custom Gofile Link",
+        "Auto Uninstall  (hapus " .. PKG_PREFIX .. "*)",
+    }, { { "0", "Exit" } })
+
+    io.write("  Pilih: ")
+    io.flush()
+    local choice = tty_read()
+
+    if choice == "0" or choice == "" then
+        print("\n  Bye!\n")
+        break
+    elseif choice == "1" then
+        do_nomercy()
+    elseif choice == "2" then
+        do_custom()
+    elseif choice == "3" then
+        do_uninstall()
     else
-        local menu_labels = {}
-        for _, k in ipairs(folder_keys) do
-            menu_labels[#menu_labels+1] = k .. "  (" .. #db[k] .. " file)"
-        end
-
-        local idx_uninstall  = #folder_keys + 1
-
-        list_menu("T O O L S   B O X", menu_labels, {
-            { tostring(idx_uninstall), "Auto Uninstall  (hapus " .. PKG_PREFIX .. "*)" },
-            { "0",                     "Exit" },
-        })
-
-        io.write("  Pilih: ")
-        io.flush()
-        local choice = tty_read()
-        local num    = tonumber(choice)
-
-        if choice == "0" then
-            print("\n  Bye!\n")
-            break
-        elseif num == idx_uninstall then
-            do_uninstall()
-        elseif num and num >= 1 and num <= #folder_keys then
-            do_install(folder_keys[num], db[folder_keys[num]])
-        else
-            print("  [!] Pilihan tidak valid.")
-            os.execute("sleep 1")
-        end
+        print("  [!] Pilihan tidak valid.")
+        os.execute("sleep 1")
     end
 end
