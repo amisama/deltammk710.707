@@ -6,7 +6,18 @@ local DL_PATH    = "/sdcard/Download/"
 local PKG_PREFIX = "com.roblox"
 
 local GOFILE_FOLDERS = {
-    { name = "Roblox", url = "https://gofile.io/d/8KFxe0" },
+    { name = "Delta/A10/32bit/", url = "https://gofile.io/d/RNI0Jf" },
+    { name = "Delta/A10/64bit/", url = "https://gofile.io/d/8KFxe0" },
+    { name = "Delta/A12/", url = "https://gofile.io/d/s9o09M" },
+    { name = "CODEX/A10/", url = "https://gofile.io/d/u2zTYS" },
+    { name = "CODEX/A12/", url = "https://gofile.io/d/DTD7Fu" },
+    { name = "ARCEUS/A10/", url = "https://gofile.io/d/JdTNI0" },
+    { name = "ARCEUS/A12/", url = "https://gofile.io/d/UBXRNf" },
+
+
+
+
+
 }
 
 local GOFILE_LANG    = "en-US"
